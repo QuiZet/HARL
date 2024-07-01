@@ -81,6 +81,8 @@ def make_train_env(env_name, seed, n_threads, env_args):
                     "simple_speaker_listener_v3",
                 ], "only cooperative scenarios in MPE are supported"
                 env = PettingZooMPEEnv(env_args)
+            elif env_name == "PCP":
+                from harl.envs.custom_envs.pcp_env import PredatorCaptureEnv
             elif env_name == "gym":
                 from harl.envs.gym.gym_env import GYMEnv
 
