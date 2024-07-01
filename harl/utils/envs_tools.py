@@ -81,8 +81,9 @@ def make_train_env(env_name, seed, n_threads, env_args):
                     "simple_speaker_listener_v3",
                 ], "only cooperative scenarios in MPE are supported"
                 env = PettingZooMPEEnv(env_args)
-            elif env_name == "PCP":
+            elif env_name == "pcp":
                 from harl.envs.custom_envs.pcp_env import PredatorCaptureEnv
+                env = PredatorCaptureEnv(env_args)
             elif env_name == "gym":
                 from harl.envs.gym.gym_env import GYMEnv
 
@@ -136,6 +137,11 @@ def make_eval_env(env_name, seed, n_threads, env_args):
                 )
 
                 env = PettingZooMPEEnv(env_args)
+            elif env_name == "pcp":
+                from harl.envs.custom_envs.pcp_env import (
+                    PredatorCaptureEnv,
+                )
+                env = PredatorCaptureEnv(env_args)
             elif env_name == "gym":
                 from harl.envs.gym.gym_env import GYMEnv
 
@@ -251,6 +257,8 @@ def get_num_agents(env, env_args, envs):
         return envs.n_agents
     elif env == "pettingzoo_mpe":
         return envs.n_agents
+    elif env == "pcp":
+        return envs.nagents
     elif env == "gym":
         return envs.n_agents
     elif env == "football":
