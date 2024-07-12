@@ -33,7 +33,7 @@ class TwinContinuousQCriticEmbd:
         self.action_type = act_space[0].__class__.__name__
 
         new_args = dict()
-        new_args["num_policies"] = 8
+        new_args["num_policies"] = 4
         new_args["num_heads"] = 4
         new_args["num_agents"] = num_agents
         new_args["embedding_dim"] = 9

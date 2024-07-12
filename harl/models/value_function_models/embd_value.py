@@ -84,15 +84,22 @@ class EmbdValueNetwork(nn.Module):
         output_dim = args["output_dim"]
         #print(f'FE cent_obs_space t:{type(cent_obs_space)}')
         cent_obs_shape = get_shape_from_obs_space(cent_obs_space)
-        print(f'FE cent_obs_shape:{cent_obs_shape}')
-
         comb_dims = get_combined_dim(cent_obs_shape[0], act_spaces)
-        #print(f'FE comb_dims:{comb_dims} embedding_dim:{embedding_dim}')
-        self.feature_extractor = FeatureExtractor(obs_dim=int(comb_dims / self.num_agents), 
-                                                  embedding_dim=embedding_dim, 
-                                                  num_heads=num_heads, 
-                                                  num_agents=self.num_agents)
-        self.ensemble_policy_heads = EnsemblePolicyHeads(input_dim=comb_dims + embedding_dim * self.num_agents, output_dim=output_dim, num_policies=num_policies)
+
+        if 'model' in args:
+            print('EmdbValueNetwork shared')
+            model = args['model']
+            self.feature_extractor = model.feature_extractor
+            self.ensemble_policy_heads = model.ensemble_policy_heads
+            self.embedding_layer = nn.Embedding(num_embeddings=self.num_agents, embedding_dim=embedding_dim)
+            self.feature_extractor.embedding_layer = self.embedding_layer
+        else:
+            print('EmdbValueNetwork new')
+            self.feature_extractor = FeatureExtractor(obs_dim=int(comb_dims / self.num_agents), 
+                                                    embedding_dim=embedding_dim, 
+                                                    num_heads=num_heads, 
+                                                    num_agents=self.num_agents)
+            self.ensemble_policy_heads = EnsemblePolicyHeads(input_dim=comb_dims + embedding_dim * self.num_agents, output_dim=output_dim, num_policies=num_policies)
         self.to(device)
 
     def forward(self, cent_obs, actions, agent_ids):

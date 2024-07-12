@@ -31,14 +31,19 @@ class EMBD(HATD3):
         print(f'final_activation_func:{final_activation_func}')
         print(f'obs_shape:{obs_shape} {obs_shape[0]}')
         print(f'act_dim:{act_dim}')
+        # Add I/O
+        args['input_dim'] = obs_shape[0]
+        args['output_dim'] = act_dim
 
         # Modify the actor policy
-        self.actor = EmbdPolicyNetwork(input_dim=obs_shape[0], 
-                                       num_heads=4,
-                                       num_policies=8,
-                                       embedding_dim=14,
-                                       output_dim=act_dim, 
-                                       num_agents=args["num_agents"], 
+        # self.actor = EmbdPolicyNetwork(input_dim=obs_shape[0], 
+        #                                num_heads=4,
+        #                                num_policies=8,
+        #                                embedding_dim=14,
+        #                                output_dim=act_dim, 
+        #                                num_agents=args["num_agents"], 
+        #                                device=device)
+        self.actor = EmbdPolicyNetwork(args, 
                                        device=device)
 
         self.target_actor = deepcopy(self.actor)
