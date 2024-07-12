@@ -9,6 +9,7 @@ from harl.algorithms.actors.had3qn import HAD3QN
 from harl.algorithms.actors.maddpg import MADDPG
 from harl.algorithms.actors.matd3 import MATD3
 from harl.algorithms.actors.mappo import MAPPO
+from harl.algorithms.actors.chatrpo import CHATRPO
 from harl.algorithms.actors.embd import EMBD
 
 ALGO_REGISTRY = {
@@ -23,4 +24,5 @@ ALGO_REGISTRY = {
     "matd3": MATD3,
     "mappo": MAPPO,
     "embd": EMBD,
+    "chatrpo": CHATRPO,
 }
