@@ -17,7 +17,7 @@ class Agent:
 new_args = dict()
 new_args["input_dim"] = 18
 new_args["num_heads"] = 4
-new_args["num_agents"] = 3
+new_args["num_agents"] = 6
 new_args["num_policies"] = 8
 new_args["embedding_dim"] = 14
 new_args["output_dim"] = 5

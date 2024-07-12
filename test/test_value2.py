@@ -17,9 +17,10 @@ class Agent:
         return self.model(obs_all, act_all, agent_ids)
     
 # Define the dimensions for share_obs_space and act_space
-share_obs_dim = 54
+obs_dim = 18
 act_dim = 5
-num_agents = 3
+num_agents = 8
+share_obs_dim = obs_dim * num_agents
 
 # Create a Box space for share_obs_space and sample from it
 share_obs_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(share_obs_dim,), dtype=np.float32)
@@ -43,7 +44,7 @@ new_args["output_dim"] = 1
 # Example inputs
 obs_all = torch.randn(2, share_obs_dim)  # (batch_size, num_agents * obs_dim)
 act_all = torch.randn(2, act_dim * num_agents)  # (batch_size, num_agents * action_dim)
-agent_ids = torch.tensor([0, 1, 2])  # agent IDs
+agent_ids = torch.arange(new_args["num_agents"]) # agent IDs
 
 # Create Agent objects for each agent
 agents = []

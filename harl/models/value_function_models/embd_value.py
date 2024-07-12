@@ -21,12 +21,43 @@ def get_combined_dim(cent_obs_feature_dim, act_spaces):
     return combined_dim
 
 
+# class FeatureExtractor(nn.Module):
+#     def __init__(self, obs_dim, embedding_dim, num_heads, num_agents):
+#         super(FeatureExtractor, self).__init__()
+#         self.embedding_layer = nn.Embedding(num_embeddings=num_agents, embedding_dim=embedding_dim)
+#         self.combined_dim = obs_dim + embedding_dim
+#         print(f'FE obs_dim:{obs_dim} embedding_dim:{embedding_dim} num_heads:{num_heads}')
+#         self.attention_layer = nn.MultiheadAttention(embed_dim=self.combined_dim, num_heads=num_heads)
+#         self.mlp = nn.Sequential(
+#             nn.Linear(self.combined_dim, 128),
+#             nn.ReLU(),
+#             nn.Linear(128, self.combined_dim)
+#         )
+        
+#     def forward(self, O_i, agent_ids):
+#         #print(f'FE O_i:{O_i.shape} agent_ids:{agent_ids}')
+#         batch_size, num_agents, obs_dim = O_i.shape
+#         # Repeat agent IDs for the batch
+#         agent_ids_expanded = agent_ids.unsqueeze(0).expand(batch_size, -1)  # (batch_size, num_agents)        
+#         #agent_embeddings = self.embedding_layer(agent_ids)  # (batch_size, num_agents, embedding_dim)
+#         agent_embeddings = self.embedding_layer(agent_ids_expanded)  # (batch_size, num_agents, embedding_dim)
+#         #agent_embeddings = agent_embeddings.expand(batch_size, num_agents, -1)  # (batch_size, num_agents, embedding_dim)
+#         O_i = torch.cat((O_i, agent_embeddings), dim=2).permute(1, 0, 2)  # (num_agents, batch_size, combined_dim)
+#         attn_output, _ = self.attention_layer(O_i, O_i, O_i)
+#         X_i = self.mlp(attn_output.permute(1, 0, 2))
+#         return X_i
+
 class FeatureExtractor(nn.Module):
     def __init__(self, obs_dim, embedding_dim, num_heads, num_agents):
         super(FeatureExtractor, self).__init__()
+
+        self.mlp_in = nn.Sequential(
+            nn.Linear(obs_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, obs_dim)
+        )
         self.embedding_layer = nn.Embedding(num_embeddings=num_agents, embedding_dim=embedding_dim)
         self.combined_dim = obs_dim + embedding_dim
-        #print(f'FE obs_dim:{obs_dim} num_heads:{num_heads}')
         self.attention_layer = nn.MultiheadAttention(embed_dim=self.combined_dim, num_heads=num_heads)
         self.mlp = nn.Sequential(
             nn.Linear(self.combined_dim, 128),
@@ -35,8 +66,9 @@ class FeatureExtractor(nn.Module):
         )
         
     def forward(self, O_i, agent_ids):
-        #print(f'FE O_i:{O_i.shape} agent_ids:{agent_ids}')
         batch_size, num_agents, obs_dim = O_i.shape
+        # Process input
+        O_i = self.mlp_in(O_i)
         # Repeat agent IDs for the batch
         agent_ids_expanded = agent_ids.unsqueeze(0).expand(batch_size, -1)  # (batch_size, num_agents)        
         #agent_embeddings = self.embedding_layer(agent_ids)  # (batch_size, num_agents, embedding_dim)
