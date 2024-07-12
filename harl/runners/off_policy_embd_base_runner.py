@@ -128,6 +128,9 @@ class OffPolicyEmbdBaseRunner:
             additional_args = dict()
             additional_args['agent_id'] = 0
             additional_args['num_agents'] = self.num_agents
+            additional_args["num_heads"] = 4
+            additional_args["num_policies"] = 4
+            additional_args["embedding_dim"] = 14
             for agent_id in range(self.num_agents):
                 additional_args['agent_id'] = agent_id
                 agent = ALGO_REGISTRY[args["algo"]](
@@ -137,6 +140,8 @@ class OffPolicyEmbdBaseRunner:
                     device=self.device,
                 )
                 self.actor.append(agent)
+                if agent_id == 0:
+                    additional_args['model'] = agent.actor
 
         if not self.algo_args["render"]["use_render"]:
             self.critic = CRITIC_REGISTRY[args["algo"]](
