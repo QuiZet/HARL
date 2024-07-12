@@ -22,7 +22,7 @@ from harl.common.buffers.off_policy_buffer_ep import OffPolicyBufferEP
 from harl.common.buffers.off_policy_buffer_fp import OffPolicyBufferFP
 
 
-class OffPolicyBaseRunner:
+class OffPolicyEmbdBaseRunner:
     """Base runner for off-policy algorithms."""
 
     def __init__(self, args, algo_args, env_args):
@@ -32,6 +32,7 @@ class OffPolicyBaseRunner:
             algo_args: arguments related to algo, loaded from config file and updated with unparsed command-line arguments.
             env_args: arguments related to env, loaded from config file and updated with unparsed command-line arguments.
         """
+        print('OffPolicyEmbdBaseRunner')
         self.args = args
         self.algo_args = algo_args
         self.env_args = env_args
@@ -100,6 +101,10 @@ class OffPolicyBaseRunner:
         for agent_id in range(self.num_agents):
             self.action_spaces[agent_id].seed(algo_args["seed"]["seed"] + agent_id + 1)
 
+        print("share_observation_space: ", self.envs.share_observation_space)
+        print("observation_space: ", self.envs.observation_space)
+        print("action_space: ", self.envs.action_space)
+
         if self.share_param:
             self.actor = []
             agent = ALGO_REGISTRY[args["algo"]](
@@ -120,9 +125,13 @@ class OffPolicyBaseRunner:
                 self.actor.append(self.actor[0])
         else:
             self.actor = []
+            additional_args = dict()
+            additional_args['agent_id'] = 0
+            additional_args['num_agents'] = self.num_agents
             for agent_id in range(self.num_agents):
+                additional_args['agent_id'] = agent_id
                 agent = ALGO_REGISTRY[args["algo"]](
-                    {**algo_args["model"], **algo_args["algo"]},
+                    {**algo_args["model"], **algo_args["algo"], **additional_args},
                     self.envs.observation_space[agent_id],
                     self.envs.action_space[agent_id],
                     device=self.device,
@@ -498,11 +507,13 @@ class OffPolicyBaseRunner:
                         )
                     )
         else:
+            agent_ids = torch.arange(self.num_agents)
             actions = []
             for agent_id in range(self.num_agents):
                 actions.append(
-                    _t2n(self.actor[agent_id].get_actions(obs[:, agent_id], add_random))
+                    _t2n(self.actor[agent_id].get_actions(obs[:, agent_id], add_random, np.squeeze(obs[:]), agent_ids))
                 )
+            #print(f'actions:{actions}')
         return np.array(actions).transpose(1, 0, 2)
 
     def train(self):
