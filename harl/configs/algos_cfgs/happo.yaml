@@ -29,7 +29,7 @@ train:
   # whether to consider the case of truncation when an episode is done
   use_proper_time_limits: True
   # if set, load models from this directory; otherwise, randomly initialise the models
-  model_dir: ~
+  model_dir: '/home/moro/workspace/university/todai/Simon/HARL/results/pettingzoo_mpe/simple_spread_v2-continuous/happo/simple/seed-00001-2024-07-04-17-26-20/models' #~
 eval:
   # whether to use evaluation
   use_eval: True
@@ -39,7 +39,7 @@ eval:
   eval_episodes: 20
 render:
   # whether to use render
-  use_render: False
+  use_render: True
   # number of episodes to render
   render_episodes: 10
 model:
