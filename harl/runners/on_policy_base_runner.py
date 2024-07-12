@@ -209,6 +209,7 @@ class OnPolicyBaseRunner:
                     rnn_states,
                     rnn_states_critic,
                 ) = self.collect(step)
+                #print(f'type of values: {type(values)}, type of actions: {type(actions)}, type of action_log_probs: {type(action_log_probs)}, type of rnn_states: {type(rnn_states)}, type of rnn_states_critic: {type(rnn_states_critic)}')
                 # actions: (n_threads, n_agents, action_dim)
                 (
                     obs,
@@ -218,6 +219,7 @@ class OnPolicyBaseRunner:
                     infos,
                     available_actions,
                 ) = self.envs.step(actions)
+                #print(f'type of obs: {type(obs)}, type of share_obs: {type(share_obs)}, type of rewards: {type(rewards)}, type of dones: {type(dones)}, type of infos: {type(infos)}, type of available_actions: {type(available_actions)}')
                 # obs: (n_threads, n_agents, obs_dim)
                 # share_obs: (n_threads, n_agents, share_obs_dim)
                 # rewards: (n_threads, n_agents, 1)
@@ -277,6 +279,7 @@ class OnPolicyBaseRunner:
                 self.actor_buffer[agent_id].available_actions[0] = available_actions[
                     :, agent_id
                 ].copy()
+        print(f'data type of actor buffer is {type(self.actor_buffer)}, if it is a list the shape is {len(self.actor_buffer)}')
         if self.state_type == "EP":
             self.critic_buffer.share_obs[0] = share_obs[:, 0].copy()
         elif self.state_type == "FP":

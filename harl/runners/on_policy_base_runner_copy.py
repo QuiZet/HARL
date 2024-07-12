@@ -37,6 +37,7 @@ class OnPolicyBaseRunner:
         self.algo_args = algo_args
         self.env_args = env_args
         self.agent_classes = agent_classes
+        print(f'self.agent_classes in on_policy_base_runner.py: {self.agent_classes}')
         self.use_class_ac = args['class_ac']
 
         self.hidden_sizes = algo_args["model"]["hidden_sizes"]
@@ -249,7 +250,7 @@ class OnPolicyBaseRunner:
             self.logger.episode_init(
                 episode
             )  # logger callback at the beginning of each episode
-            print('checkpoint 1')
+            #print('checkpoint 1')
             self.prep_rollout()  # change to eval mode
             for step in range(self.algo_args["train"]["episode_length"]):
                 # Sample actions from actors and values from critics
@@ -261,6 +262,7 @@ class OnPolicyBaseRunner:
                     rnn_states_critic,
                 ) = self.collect(step)
                 # actions: (n_threads, n_agents, action_dim)
+                #print(f'actions: {actions}, actions data type:{type(actions)}, dimension of actions: {actions.shape}, expected env action space: {self.envs.action_space}')
                 (
                     obs,
                     share_obs,
@@ -290,16 +292,17 @@ class OnPolicyBaseRunner:
                 )
 
                 self.logger.per_step(data)  # logger callback at each step
-                print('checkpoint 2')
+                #print('checkpoint 2')
                 self.insert(data)  # insert data into buffer
 
             # compute return and update network
-            print('checkpoint 3')
+            #print('checkpoint 3')
             self.compute()
-            print('checkpoint 4')
+            #print('checkpoint 4')
             self.prep_training()  # change to train mode
             print('checkpoint 5')
             actor_train_infos, critic_train_info = self.train()
+            print('checkpoint 6')
 
             # log information
             if episode % self.algo_args["train"]["log_interval"] == 0:
@@ -309,12 +312,14 @@ class OnPolicyBaseRunner:
                     self.actor_buffer,
                     self.critic_buffer if not self.use_class_ac else self.class_critics,
                 )
-
+            print(f'checkpoint 7')
             # eval
             if episode % self.algo_args["train"]["eval_interval"] == 0:
                 if self.algo_args["eval"]["use_eval"]:
                     self.prep_rollout()
+                    print('checkpoint 8')
                     self.eval()
+                    print('checkpoint 9')
                 self.save()
 
             self.after_update()
@@ -409,9 +414,12 @@ class OnPolicyBaseRunner:
                     values[class_id] = np.array(np.split(_t2n(value), self.algo_args["train"]["n_rollout_threads"]))
                     rnn_states_critic[class_id] = np.array(np.split(_t2n(rnn_state_critic), self.algo_args["train"]["n_rollout_threads"]))
 
-            return values, actions, action_log_probs, rnn_states, rnn_states_critic
+            # Flatten the dictionary of values to a single numpy array
+            values_list = [values[class_id] for class_id in sorted(values.keys())]
+            values_array = np.concatenate(values_list, axis=1)
+
+            return values_array, np.concatenate(actions, axis=0), np.concatenate(action_log_probs, axis=0), np.concatenate(rnn_states, axis=0), np.concatenate(list(rnn_states_critic.values()), axis=0)
         else:
-            # Existing code for non-class-based collection
             actions = []
             action_log_probs = []
             rnn_states = []
@@ -461,6 +469,19 @@ class OnPolicyBaseRunner:
     def insert(self, data):
         """Insert data into buffer."""
         obs, share_obs, rewards, dones, infos, available_actions, values, actions, action_log_probs, rnn_states, rnn_states_critic = data
+
+        # Assert data types
+        assert isinstance(obs, np.ndarray), f"For obs Expected np.ndarray, got {type(obs)}"
+        assert isinstance(share_obs, np.ndarray), f"For share_obs Expected np.ndarray, got {type(share_obs)}"
+        assert isinstance(rewards, np.ndarray), f"For rewards Expected np.ndarray, got {type(rewards)}"
+        assert isinstance(dones, np.ndarray), f"For dones Expected np.ndarray, got {type(dones)}"
+        assert isinstance(infos, tuple), f"For infos Expected tuple, got {type(infos)}"
+        assert isinstance(available_actions, np.ndarray), f"For available_actions Expected np.ndarray, got {type(available_actions)}"
+        assert isinstance(values, np.ndarray), f"For values Expected np.ndarray, got {type(values)}"
+        assert isinstance(actions, np.ndarray), f"For actions Expected np.ndarray, got {type(actions)}"
+        assert isinstance(action_log_probs, np.ndarray), f"For action_log_probs Expected np.ndarray, got {type(action_log_probs)}"
+        assert isinstance(rnn_states, np.ndarray), f"For rnn_states Expected np.ndarray, got {type(rnn_states)}"
+        assert isinstance(rnn_states_critic, np.ndarray), f"For rnn_states_critic Expected np.ndarray, got {type(rnn_states_critic)}"
 
         dones_env = np.all(dones, axis=1)
         rnn_states[dones_env == True] = np.zeros(
@@ -534,8 +555,13 @@ class OnPolicyBaseRunner:
 
         if self.use_class_ac:
             for class_id, agents in self.agent_classes.items():
+                if isinstance(class_id, str):  # Skip over string keys
+                    continue
+                if not isinstance(agents, list):
+                    print(f'Expected list for agents, got {type(agents)} for class_id {class_id}')
+                    raise TypeError(f'Expected list for agents, got {type(agents)}')
                 for agent_id in agents:
-                    self.actor_buffer[agent_id].insert(
+                    self.actor_buffer[class_id].insert(
                         obs[:, agent_id],
                         rnn_states[:, agent_id],
                         actions[:, agent_id],
@@ -586,6 +612,7 @@ class OnPolicyBaseRunner:
                 self.critic_buffer.insert(
                     share_obs, rnn_states_critic, values, rewards, masks, bad_masks
                 )
+
 
 
     @torch.no_grad()
