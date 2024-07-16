@@ -131,6 +131,7 @@ class OffPolicyEmbdBaseRunner:
             additional_args["num_heads"] = 4
             additional_args["num_policies"] = 4
             additional_args["embedding_dim"] = 14
+            additional_args["obs_dim_resized"] = 18
             for agent_id in range(self.num_agents):
                 additional_args['agent_id'] = agent_id
                 agent = ALGO_REGISTRY[args["algo"]](

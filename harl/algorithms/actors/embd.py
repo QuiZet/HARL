@@ -91,6 +91,7 @@ class EMBD(HATD3):
         obs_all = obs_all.unsqueeze(0) if obs_all.dim() == 2 else obs_all
         agent_ids = check(agent_ids).to(obs_all.device)
         #print(f'obs:{obs.shape} obs_all:{obs_all.shape} agent_ids:{agent_ids.shape}')
+        #exit(0)
         #agent_ids = torch.arange(len(obs)).to(obs.device)
         actions = self.actor(obs_all, agent_ids)
         #print(f'actions s:{actions.shape}')

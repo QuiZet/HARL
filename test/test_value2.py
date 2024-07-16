@@ -17,9 +17,9 @@ class Agent:
         return self.model(obs_all, act_all, agent_ids)
     
 # Define the dimensions for share_obs_space and act_space
-obs_dim = 18
+num_agents = 6
+obs_dim = 6 * num_agents
 act_dim = 5
-num_agents = 8
 share_obs_dim = obs_dim * num_agents
 
 # Create a Box space for share_obs_space and sample from it
@@ -38,8 +38,9 @@ new_args = dict()
 new_args["num_policies"] = 8
 new_args["num_heads"] = 4
 new_args["num_agents"] = num_agents
-new_args["embedding_dim"] = 9
+new_args["embedding_dim"] = 14
 new_args["output_dim"] = 1
+new_args["obs_dim_resized"] = 18
 
 # Example inputs
 obs_all = torch.randn(2, share_obs_dim)  # (batch_size, num_agents * obs_dim)
@@ -55,6 +56,7 @@ for i in range(1, new_args['num_agents']):
 
 # Assuming all agents use the same model, perform forward pass
 for i, agent in enumerate(agents):
+    print(f'obs_all:{obs_all.shape} act_all:{act_all.shape}')
     result = agent.result(obs_all, act_all, agent_ids)
     print(f'i:{i} result.size():{result.size()}')  # Expected size: (batch_size, action_dim)
     print(result)  # Expected size: (batch_size, action_dim)
