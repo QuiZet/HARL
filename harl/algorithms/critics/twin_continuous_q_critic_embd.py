@@ -36,8 +36,9 @@ class TwinContinuousQCriticEmbd:
         new_args["num_policies"] = 4
         new_args["num_heads"] = 4
         new_args["num_agents"] = num_agents
-        new_args["embedding_dim"] = 9
+        new_args["embedding_dim"] = 14 #9
         new_args["output_dim"] = 1
+        new_args["obs_dim_resized"] = 18
         print(f'share_obs_space >> :{share_obs_space} act_space:{act_space} <<')
         self.critic = EmbdValueNetwork(new_args, share_obs_space, act_space, device)
         self.critic2 = EmbdValueNetwork(new_args, share_obs_space, act_space, device)
