@@ -1,4 +1,4 @@
-"""CHATRPO algorithm."""
+"""HATRPO algorithm."""
 
 import numpy as np
 import torch
@@ -17,7 +17,7 @@ from harl.models.policy_models.stochastic_policy import StochasticPolicy
 
 class CHATRPO(OnPolicyBase):
     def __init__(self, args, obs_space, act_space, device=torch.device("cpu")):
-        """Initialize CHATRPO algorithm.
+        """Initialize HATRPO algorithm.
         Args:
             args: (dict) arguments.
             obs_space: (gym.spaces or list) observation space.
@@ -26,49 +26,13 @@ class CHATRPO(OnPolicyBase):
         """
         assert (
             act_space.__class__.__name__ != "MultiDiscrete"
-        ), "only continuous and discrete action space is supported by CHATRPO."
+        ), "only continuous and discrete action space is supported by HATRPO."
         super(CHATRPO, self).__init__(args, obs_space, act_space, device)
 
         self.kl_threshold = args["kl_threshold"]
         self.ls_step = args["ls_step"]
         self.accept_ratio = args["accept_ratio"]
         self.backtrack_coeff = args["backtrack_coeff"]
-
-        self.use_class_ac = args.get('class_ac', True)
-
-        if self.use_class_ac:
-            self.class_actors = {}
-            self.class_critics = {}
-            self.class_id_map = {}
-
-    def get_class_id_from_obs_act_space(self, obs_space, act_space):
-        """Assign a unique class ID based on obs_space and act_space.
-        Args:
-            obs_space: (gym.spaces) observation space.
-            act_space: (gym.spaces) action space.
-        Returns:
-            class_id: (int) class ID.
-        """
-        obs_act_tuple = (obs_space, act_space)
-        if obs_act_tuple not in self.class_id_map:
-            self.class_id_map[obs_act_tuple] = len(self.class_id_map) + 1
-        return self.class_id_map[obs_act_tuple]
-
-    def append_class_id_to_observation(self, observation, class_id):
-        """Append class ID to the observation array or tensor.
-        Args:
-            observation: (np.ndarray or torch.Tensor) observation array or tensor.
-            class_id: (int) class ID.
-        Returns:
-            observation_with_class_id: (np.ndarray or torch.Tensor) observation with class ID appended.
-        """
-        if isinstance(observation, np.ndarray):
-            return np.append(observation, class_id)
-        elif isinstance(observation, torch.Tensor):
-            class_id_tensor = torch.tensor([class_id], dtype=observation.dtype, device=observation.device)
-            return torch.cat((observation, class_id_tensor), dim=-1)
-        else:
-            raise TypeError("Unsupported observation type")
 
     def update(self, sample):
         """Update actor networks.
@@ -94,19 +58,14 @@ class CHATRPO(OnPolicyBase):
             factor_batch,
         ) = sample
 
-        obs_space = obs_batch[0].shape
-        act_space = actions_batch[0].shape
-        class_id = self.get_class_id_from_obs_act_space(obs_space, act_space)
-        obs_batch_with_class_id = [self.append_class_id_to_observation(obs, class_id) for obs in obs_batch]
-
         old_action_log_probs_batch = check(old_action_log_probs_batch).to(**self.tpdv)
         adv_targ = check(adv_targ).to(**self.tpdv)
         active_masks_batch = check(active_masks_batch).to(**self.tpdv)
         factor_batch = check(factor_batch).to(**self.tpdv)
 
         # Reshape to do evaluations for all steps in a single forward pass
-        action_log_probs, dist_entropy, _ = self.class_actors[class_id].evaluate_actions(
-            obs_batch_with_class_id,
+        action_log_probs, dist_entropy, _ = self.evaluate_actions(
+            obs_batch,
             rnn_states_batch,
             actions_batch,
             masks_batch,
@@ -131,13 +90,13 @@ class CHATRPO(OnPolicyBase):
             ).mean()
 
         loss_grad = torch.autograd.grad(
-            loss, self.class_actors[class_id].parameters(), allow_unused=True
+            loss, self.actor.parameters(), allow_unused=True
         )
         loss_grad = flat_grad(loss_grad)
 
         step_dir = conjugate_gradient(
-            self.class_actors[class_id],
-            obs_batch_with_class_id,
+            self.actor,
+            obs_batch,
             rnn_states_batch,
             actions_batch,
             masks_batch,
@@ -150,10 +109,10 @@ class CHATRPO(OnPolicyBase):
 
         loss = loss.data.cpu().numpy()
 
-        params = flat_params(self.class_actors[class_id])
+        params = flat_params(self.actor)
         fvp = fisher_vector_product(
-            self.class_actors[class_id],
-            obs_batch_with_class_id,
+            self.actor,
+            obs_batch,
             rnn_states_batch,
             actions_batch,
             masks_batch,
@@ -177,9 +136,9 @@ class CHATRPO(OnPolicyBase):
         fraction = 1
         for i in range(self.ls_step):
             new_params = params + fraction * full_step
-            update_model(self.class_actors[class_id], new_params)
-            action_log_probs, dist_entropy, _ = self.class_actors[class_id].evaluate_actions(
-                obs_batch_with_class_id,
+            update_model(self.actor, new_params)
+            action_log_probs, dist_entropy, _ = self.evaluate_actions(
+                obs_batch,
                 rnn_states_batch,
                 actions_batch,
                 masks_batch,
@@ -206,13 +165,13 @@ class CHATRPO(OnPolicyBase):
             loss_improve = new_loss - loss
 
             kl = kl_divergence(
-                obs_batch_with_class_id,
+                obs_batch,
                 rnn_states_batch,
                 actions_batch,
                 masks_batch,
                 available_actions_batch,
                 active_masks_batch,
-                new_actor=self.class_actors[class_id],
+                new_actor=self.actor,
                 old_actor=old_actor,
             )
             kl = kl.mean()
@@ -229,8 +188,8 @@ class CHATRPO(OnPolicyBase):
 
         if not flag:
             params = flat_params(old_actor)
-            update_model(self.class_actors[class_id], params)
-            print("policy update does not improve the surrogate")
+            update_model(self.actor, params)
+            print("policy update does not impove the surrogate")
 
         return kl, loss_improve, expected_improve, dist_entropy, ratio
 
