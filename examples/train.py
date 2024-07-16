@@ -1,6 +1,4 @@
 """Train an algorithm."""
-import sys
-sys.path.append('.')
 import argparse
 import json
 from harl.utils.configs_tools import get_defaults_yaml_args, update_args
@@ -26,9 +24,8 @@ def main():
             "maddpg",
             "matd3",
             "mappo",
-            "embd",
         ],
-        help="Algorithm name. Choose from: happo, hatrpo, haa2c, haddpg, hatd3, hasac, had3qn, maddpg, matd3, mappo, embd.",
+        help="Algorithm name. Choose from: happo, hatrpo, haa2c, haddpg, hatd3, hasac, had3qn, maddpg, matd3, mappo.",
     )
     parser.add_argument(
         "--env",

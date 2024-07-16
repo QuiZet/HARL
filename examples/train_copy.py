@@ -107,33 +107,10 @@ def main():
         env_args,
     )
 
-    # Modified part to initialize agent classes and critics
-    if args['class_ac']:
-        from harl.utils.envs_tools import get_num_agents
-
-        num_agents = get_num_agents(args['env'], env_args, envs)
-        agent_classes = {}  # Dictionary to hold class-based agents
-        for agent_id in range(num_agents):
-            obs_space = envs.observation_space[agent_id]
-            act_space = envs.action_space[agent_id]
-            obs_act_tuple = (tuple(obs_space.shape), obs_space.dtype.name, tuple(act_space.shape), act_space.dtype.name)
-            obs_act_str = str(obs_act_tuple)  # Convert tuple to string
-            if obs_act_str not in agent_classes:
-                agent_classes[obs_act_str] = len(agent_classes) + 1
-            class_id = agent_classes[obs_act_str]
-            if class_id not in agent_classes:
-                agent_classes[class_id] = []
-            agent_classes[class_id].append(agent_id)
-        algo_args['agent_classes'] = agent_classes
-
     # start training
     from harl.runners import RUNNER_REGISTRY
 
-    if args['class_ac']:
-        print(f'agent_classes in train_copy.py: {agent_classes}')
-        runner = RUNNER_REGISTRY[args['algo']](args, algo_args, env_args, agent_classes)
-    else:
-        runner = RUNNER_REGISTRY[args['algo']](args, algo_args, env_args)
+    runner = RUNNER_REGISTRY[args['algo']](args, algo_args, env_args)
     runner.run()
     runner.close()
 
