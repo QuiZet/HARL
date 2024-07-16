@@ -306,12 +306,6 @@ class OnPolicyBaseRunner:
             action_collector.append(_t2n(action))
             action_log_prob_collector.append(_t2n(action_log_prob))
             rnn_state_collector.append(_t2n(rnn_state))
-            
-
-        print(f'actions shape before transpose: {np.array(action_collector).shape}')
-        print(f'action_log_probs shape before transpose: {np.array(action_log_prob_collector).shape}')
-        print(f'rnn_states shape before transpose: {np.array(rnn_state_collector).shape}')
-        
         # (n_agents, n_threads, dim) -> (n_threads, n_agents, dim)
         actions = np.array(action_collector).transpose(1, 0, 2)
         action_log_probs = np.array(action_log_prob_collector).transpose(1, 0, 2)
