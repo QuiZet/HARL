@@ -7,6 +7,9 @@ import torch.optim as optim
 
 from harl.models.policy_models.embd_policy import EmbdPolicyNetwork
 
+import gym
+import numpy as np
+
 class Agent:
     def __init__(self, args, device):
         self.model = EmbdPolicyNetwork(args, device).to(device)
@@ -25,9 +28,29 @@ new_args = {
     "embedding_dim": 14,
     "output_dim": 5,
     "input_dim": input_dim_base_size,
-    "obs_dim_resized": 18
+    "obs_dim_resized": 18,
+    "hidden_sizes": [128, 128],
+    "activation_func": "relu",
+    "final_activation_func": "tanh"
 }
 new_args['input_dim'] = new_args['input_dim'] * new_args['num_agents']
+
+# # Define the dimensions for share_obs_space and act_space
+# num_agents = 6
+# obs_dim = 6 * num_agents
+# act_dim = 5
+# share_obs_dim = obs_dim * num_agents
+
+# Create a Box space for share_obs_space and sample from it
+share_obs_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(new_args['input_dim'],), dtype=np.float32)
+share_obs_sample = share_obs_space.sample()
+
+# Create a list of Box spaces for act_space and sample from each
+act_space = [gym.spaces.Box(low=0.0, high=1.0, shape=(new_args['output_dim'],), dtype=np.float32) for _ in range(new_args['num_agents'])]
+act_samples = [space.sample() for space in act_space]
+
+new_args['obs_space'] = share_obs_space
+new_args['action_space'] = act_space[0]
 
 obs_all = torch.randn(2, new_args["num_agents"], new_args["input_dim"]).to(device)  # (batch_size, num_agents, obs_dim)
 agent_ids = torch.arange(new_args["num_agents"]).to(device)  # agent IDs
@@ -42,7 +65,7 @@ for _ in range(1, new_args['num_agents']):
 criterion = nn.MSELoss()  # Example loss function, modify as needed
 optimizer = optim.Adam(agents[0].model.parameters(), lr=1e-3)  # Example optimizer, modify as needed
 
-num_epochs = 1  # Example number of epochs
+num_epochs = 1000  # Example number of epochs
 
 # Training loop
 start_time = time.time()
@@ -55,7 +78,8 @@ for epoch in range(num_epochs):
         actions = agent.select_action(obs_all, agent_ids)
         
         # Example target, modify as needed
-        target = torch.zeros_like(actions)
+        #target = torch.zeros_like(actions)
+        target = torch.randn(actions.shape).to(device)
         
         # Compute loss
         loss = criterion(actions, target)

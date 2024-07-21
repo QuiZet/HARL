@@ -503,6 +503,8 @@ class OffPolicyBaseRunner:
                 actions.append(
                     _t2n(self.actor[agent_id].get_actions(obs[:, agent_id], add_random))
                 )
+            #print(f'actions:{np.array(actions).shape}')
+            # print(f'actions:{np.array(actions)}')
         return np.array(actions).transpose(1, 0, 2)
 
     def train(self):

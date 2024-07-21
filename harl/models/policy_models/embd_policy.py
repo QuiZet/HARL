@@ -125,7 +125,8 @@ class FeatureExtractor(nn.Module):
         x = x.view(batch_size, num_agents, -1)
 
         # Repeat agent IDs for the batch
-        agent_ids_expanded = agent_ids.unsqueeze(0).expand(batch_size, -1)  # (batch_size, num_agents)        
+        #agent_ids_expanded = agent_ids.unsqueeze(0).expand(batch_size, -1)  # (batch_size, num_agents)        
+        agent_ids_expanded = agent_ids        
         e = self.embedding(agent_ids_expanded)  # (batch_size, num_agents, embedding_dim)
 
         x = torch.cat((x, e), dim=-1)
@@ -147,7 +148,7 @@ class EnsemblePolicyHeads(nn.Module):
         self.policy_blocks = nn.ModuleList([nn.Sequential(
             nn.Linear(input_dim, 128),
             nn.ReLU(),
-            nn.Linear(128, output_dim)
+            nn.Linear(128, output_dim),
         ) for _ in range(num_policies)])
         
         # Define the attention layer to compute beta_i
@@ -196,3 +197,215 @@ class EmbdPolicyNetwork(nn.Module):
         z_i = self.feature_extractor(O_i, agent_ids)  # (batch_size, num_agents, combined_dim)
         output = self.ensemble_policy_heads(z_i)
         return output
+
+
+
+
+
+from harl.utils.envs_tools import get_shape_from_obs_space
+from harl.models.base.plain_cnn import PlainCNN
+from harl.models.base.plain_mlp import PlainMLP
+
+# class EmbdPolicyNetwork(nn.Module):
+#     """Deterministic policy network for continuous action space."""
+
+#     def __init__(self, args, device=torch.device("cpu")):
+#         """Initialize DeterministicPolicy model.
+#         Args:
+#             args: (dict) arguments containing relevant model information.
+#             obs_space: (gym.Space) observation space.
+#             action_space: (gym.Space) action space.
+#             device: (torch.device) specifies the device to run on (cpu/gpu).
+#         """
+#         super().__init__()
+
+#         obs_space = args["obs_space"]
+#         action_space = args["action_space"]
+
+#         self.tpdv = dict(dtype=torch.float32, device=device)
+#         hidden_sizes = args["hidden_sizes"]
+#         activation_func = args["activation_func"]
+#         final_activation_func = args["final_activation_func"]
+#         obs_shape = get_shape_from_obs_space(obs_space)
+#         if len(obs_shape) == 3:
+#             self.feature_extractor = PlainCNN(
+#                 obs_shape, hidden_sizes[0], activation_func
+#             )
+#             feature_dim = hidden_sizes[0]
+#         else:
+#             self.feature_extractor = None
+#             feature_dim = obs_shape[0]
+#         act_dim = action_space.shape[0]
+#         pi_sizes = [feature_dim] + list(hidden_sizes) + [act_dim]
+#         self.pi = PlainMLP(pi_sizes, activation_func, final_activation_func)
+#         low = torch.tensor(action_space.low).to(**self.tpdv)
+#         high = torch.tensor(action_space.high).to(**self.tpdv)
+#         self.scale = (high - low) / 2
+#         self.mean = (high + low) / 2
+#         self.to(device)
+
+#     def forward(self, obs, agent_ids):
+#         # Return output from network scaled to action space limits.
+#         if self.feature_extractor is not None:
+#             x = self.feature_extractor(obs)
+#         else:
+#             x = obs
+#         x = self.pi(x)
+#         x = self.scale * x + self.mean
+#         return x
+
+
+# class EnsemblePolicyHeads(nn.Module):
+#     def __init__(self, args, input_dim, output_dim, num_policies):
+#         super(EnsemblePolicyHeads, self).__init__()
+#         self.num_policies = num_policies
+        
+#         hidden_sizes = args["hidden_sizes"]
+#         activation_func = args["activation_func"]
+#         final_activation_func = args["final_activation_func"]
+#         pi_sizes = [input_dim] + list(hidden_sizes) + [output_dim]
+#         print(f'pi_size:{pi_sizes}')
+
+#         # Define K shared MLPs
+#         self.policy_blocks = nn.ModuleList([PlainMLP(pi_sizes, activation_func, final_activation_func) for _ in range(num_policies)])
+        
+#     def forward(self, z_i):
+#         policy_outputs = torch.stack([policy_block(z_i) for policy_block in self.policy_blocks], dim=1)  # (batch_size, num_policies, output_dim)
+#         averaged_policy_output = torch.mean(policy_outputs, dim=1)  # (batch_size, output_dim)
+#         return averaged_policy_output
+
+
+
+class PlainMLPNew(nn.Module):
+    def __init__(self, layer_sizes, activation_func, final_activation_func):
+        super(PlainMLPNew, self).__init__()
+        layers = []
+        for i in range(len(layer_sizes) - 1):
+            layers.append(nn.Linear(layer_sizes[i], layer_sizes[i + 1]))
+            if i < len(layer_sizes) - 2:
+                layers.append(activation_func())
+        layers.append(final_activation_func())
+        self.model = nn.Sequential(*layers)
+    
+    def forward(self, x):
+        return self.model(x)
+
+class EnsemblePolicyHeads(nn.Module):
+    def __init__(self, args, input_dim, output_dim, num_policies):
+        super(EnsemblePolicyHeads, self).__init__()
+        self.num_policies = num_policies
+        
+        hidden_sizes = args["hidden_sizes"]
+        activation_func = args["activation_func"]
+        final_activation_func = args["final_activation_func"]
+        pi_sizes = [input_dim] + list(hidden_sizes) + [output_dim]
+        print(f'pi_size:{pi_sizes}')
+
+        # Define K shared MLPs
+        self.policy_blocks = nn.ModuleList([PlainMLPNew(pi_sizes, activation_func, final_activation_func) for _ in range(num_policies)])
+
+        # Define the attention layer to compute beta_i
+        self.attention_layer = nn.Linear(input_dim, num_policies)
+
+    # def forward(self, z_i):
+    #     policy_outputs = torch.stack([policy_block(z_i) for policy_block in self.policy_blocks], dim=1)  # (batch_size, num_policies, output_dim)
+    #     averaged_policy_output = torch.mean(policy_outputs, dim=1)  # (batch_size, output_dim)
+    #     return averaged_policy_output
+
+    def forward(self, z_i):
+        z_i = torch.flatten(z_i, start_dim=1)  # (batch_size, num_agents * combined_dim)
+        attention_weights = F.softmax(self.attention_layer(z_i), dim=1)
+        
+        policy_outputs = torch.stack([policy_block(z_i) for policy_block in self.policy_blocks], dim=1)  # (batch_size, num_policies, output_dim)
+        weighted_policy_output = torch.sum(attention_weights.unsqueeze(-1) * policy_outputs, dim=1)  # (batch_size, output_dim)
+        return weighted_policy_output
+
+
+
+# https://stackoverflow.com/questions/68547474/learnable-weighted-sum-of-tensors
+
+class EmbdPolicyNetwork(nn.Module):
+    """Deterministic policy network for continuous action space."""
+
+    def __init__(self, args, device=torch.device("cpu")):
+        """Initialize DeterministicPolicy model.
+        Args:
+            args: (dict) arguments containing relevant model information.
+            obs_space: (gym.Space) observation space.
+            action_space: (gym.Space) action space.
+            device: (torch.device) specifies the device to run on (cpu/gpu).
+        """
+        super().__init__()
+
+        obs_space = args["obs_space"]
+        action_space = args["action_space"]
+
+        input_dim = args["input_dim"]
+        num_heads = args["num_heads"]
+        num_agents = args["num_agents"]
+        num_policies = args["num_policies"]
+        embedding_dim = args["embedding_dim"]
+        output_dim = args["output_dim"]
+        obs_dim_resized = args["obs_dim_resized"]
+        # share from an existing model
+        if 'model' in args:
+            print('EmdbPolicyNetwork shared')
+            model = args['model']
+            self.feature_extractor = model.feature_extractor
+            self.ensemble_policy_heads = model.ensemble_policy_heads
+            # self.embedding_layer = nn.Embedding(num_embeddings=num_agents, embedding_dim=embedding_dim)
+            # self.feature_extractor.embedding_layer = self.embedding_layer
+        else:
+            print('EmdbPolicyNetwork new')
+            # Define the model hyperparameters
+            args_new = {
+                "hidden_sizes": [128, 128],
+                "activation_func": nn.ReLU,
+                "final_activation_func": nn.Identity
+            }
+            self.feature_extractor = FeatureExtractor(obs_dim=input_dim, mlp_hidden_dim=obs_dim_resized, 
+                                                      embedding_dim=embedding_dim, attention_heads=num_heads, num_agents=num_agents)
+            self.ensemble_policy_heads = EnsemblePolicyHeads(args=args_new,
+                                                             input_dim=obs_dim_resized, 
+                                                             output_dim=output_dim, num_policies=num_policies)
+
+        self.tpdv = dict(dtype=torch.float32, device=device)
+        hidden_sizes = args["hidden_sizes"]
+        activation_func = args["activation_func"]
+        final_activation_func = args["final_activation_func"]
+        obs_shape = get_shape_from_obs_space(obs_space)
+        # if len(obs_shape) == 3:
+        #     self.feature_extractor = PlainCNN(
+        #         obs_shape, hidden_sizes[0], activation_func
+        #     )
+        #     feature_dim = hidden_sizes[0]
+        # else:
+        #     self.feature_extractor = None
+        #     feature_dim = obs_shape[0]
+        # act_dim = action_space.shape[0]
+        # pi_sizes = [feature_dim] + list(hidden_sizes) + [act_dim]
+
+        act_dim = action_space.shape[0]
+        pi_sizes = [obs_dim_resized] + list(hidden_sizes) + [act_dim]
+        print(f'pi_size:{pi_sizes}')
+        self.pi = PlainMLP(pi_sizes, activation_func, final_activation_func)
+        low = torch.tensor(action_space.low).to(**self.tpdv)
+        high = torch.tensor(action_space.high).to(**self.tpdv)
+        self.scale = (high - low) / 2
+        self.mean = (high + low) / 2
+        self.to(device)
+
+    def forward(self, obs, agent_ids):
+        # Return output from network scaled to action space limits.
+        # if self.feature_extractor is not None:
+        #     x = self.feature_extractor(obs)
+        # else:
+        #     x = obs
+        # x = self.pi(x)
+        # x = self.scale * x + self.mean
+
+        z_i = self.feature_extractor(obs, agent_ids)  # (batch_size, num_agents, combined_dim)
+        #x = self.pi(z_i)
+        x = self.ensemble_policy_heads(z_i)
+        x = self.scale * x + self.mean
+        return x

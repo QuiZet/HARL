@@ -1,3 +1,5 @@
+import sys
+sys.path.append('.')
 """Train an algorithm."""
 import argparse
 import json
@@ -24,7 +26,8 @@ def main():
             "maddpg",
             "matd3",
             "mappo",
-            "chatrpo"
+            "chatrpo",
+            "embd"
         ],
         help="Algorithm name. Choose from: happo, hatrpo, haa2c, haddpg, hatd3, hasac, had3qn, maddpg, matd3, mappo.",
     )

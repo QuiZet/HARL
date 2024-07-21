@@ -1,4 +1,5 @@
 """Runner for off-policy HARL algorithms."""
+import time
 import torch
 import numpy as np
 import torch.nn.functional as F
@@ -8,7 +9,7 @@ from einops import rearrange
 class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
     """Runner for off-policy Embedded algorithms."""
 
-    def train(self):
+    def train(self, debug=False):
         """Train the model"""
         self.total_it += 1
         data = self.buffer.sample()
@@ -26,8 +27,9 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
             sp_next_available_actions,  # (n_agents, batch_size, dim)
             sp_gamma,  # EP: (batch_size, 1), FP: (n_agents * batch_size, 1)
         ) = data
-        #print(f'sp_obs:{sp_obs.shape}')
-        # train critic
+        
+        # Train critic
+        critic_start_time = time.time()
         self.critic.turn_on_grad()
         if self.args["algo"] == "hasac":
             next_actions = []
@@ -58,12 +60,13 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
             )
         else:
             agent_ids = torch.arange(self.num_agents)
+            agent_ids_expanded = agent_ids.unsqueeze(0).expand(sp_next_obs.shape[1], -1)  # (batch_size, num_agents)
             # Swap dimensions using einops
             tensor_swapped = rearrange(sp_next_obs, 'a b c -> b a c')
             next_actions = []
             for agent_id in range(self.num_agents):
                 next_actions.append(
-                    self.actor[agent_id].get_target_actions(sp_next_obs[agent_id], tensor_swapped, agent_ids)
+                    self.actor[agent_id].get_target_actions(sp_next_obs[agent_id], tensor_swapped, agent_ids_expanded)
                 )
             self.critic.train(
                 sp_share_obs,
@@ -76,9 +79,15 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
                 sp_gamma,
             )
         self.critic.turn_off_grad()
+        critic_end_time = time.time()
+        critic_time = critic_end_time - critic_start_time
+        if debug:
+            print(f"Critic training took {critic_time:.6f} seconds")
+        
         sp_valid_transition = torch.tensor(sp_valid_transition, device=self.device)
         if self.total_it % self.policy_freq == 0:
-            # train actors
+            # Train actors
+            actor_start_time = time.time()
             if self.args["algo"] == "hasac":
                 actions = []
                 logp_actions = []
@@ -102,7 +111,7 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
                     agent_order = list(np.random.permutation(self.num_agents))
                 for agent_id in agent_order:
                     self.actor[agent_id].turn_on_grad()
-                    # train this agent
+                    # Train this agent
                     actions[agent_id], logp_actions[agent_id] = self.actor[
                         agent_id
                     ].get_actions_with_logprobs(
@@ -150,7 +159,7 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
                     actor_loss.backward()
                     self.actor[agent_id].actor_optimizer.step()
                     self.actor[agent_id].turn_off_grad()
-                    # train this agent's alpha
+                    # Train this agent's alpha
                     if self.algo_args["algo"]["auto_alpha"]:
                         log_prob = (
                             logp_actions[agent_id].detach()
@@ -171,7 +180,7 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
                         if sp_available_actions is not None
                         else None,
                     )
-                # train critic's alpha
+                # Train critic's alpha
                 if self.algo_args["algo"]["auto_alpha"]:
                     self.critic.update_alpha(logp_actions, np.sum(self.target_entropy))
             else:
@@ -194,13 +203,13 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
                         agent_order = list(np.random.permutation(self.num_agents))
                     for agent_id in agent_order:
                         self.actor[agent_id].turn_on_grad()
-                        # actor preds
+                        # Actor preds
                         actor_values = self.actor[agent_id].train_values(
                             sp_obs[agent_id], actions[agent_id]
                         )
-                        # critic preds
+                        # Critic preds
                         critic_values = get_values()
-                        # update
+                        # Update
                         actor_loss = torch.mean(F.mse_loss(actor_values, critic_values))
                         self.actor[agent_id].actor_optimizer.zero_grad()
                         actor_loss.backward()
@@ -209,6 +218,7 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
                         update_actions(agent_id)
                 else:
                     agent_ids = torch.arange(self.num_agents)
+                    agent_ids_expanded = agent_ids.unsqueeze(0).expand(sp_next_obs.shape[1], -1)  # (batch_size, num_agents)
                     # Swap dimensions using einops
                     tensor_swapped = rearrange(sp_next_obs, 'a b c -> b a c')
                     actions = []
@@ -216,7 +226,7 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
                         for agent_id in range(self.num_agents):
                             actions.append(
                                 self.actor[agent_id].get_actions(
-                                    sp_obs[agent_id], False, tensor_swapped, agent_ids
+                                    sp_obs[agent_id], False, tensor_swapped, agent_ids_expanded
                                 )
                             )
                     # actions shape: (n_agents, batch_size, dim)
@@ -224,24 +234,30 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
                         agent_order = list(range(self.num_agents))
                     else:
                         agent_order = list(np.random.permutation(self.num_agents))
-                    agent_ids = torch.arange(self.num_agents)
+                    #agent_ids = torch.arange(self.num_agents) # error, it does not preserve the permutation
+                    agent_ids = torch.as_tensor(agent_order)
+                    agent_ids_expanded = agent_ids.unsqueeze(0).expand(sp_next_obs.shape[1], -1)  # (batch_size, num_agents)
                     for agent_id in agent_order:
                         self.actor[agent_id].turn_on_grad()
-                        # train this agent
+                        # Train this agent
                         actions[agent_id] = self.actor[agent_id].get_actions(
-                            sp_obs[agent_id], False, tensor_swapped, agent_ids
+                            sp_obs[agent_id], False, tensor_swapped, agent_ids_expanded
                         )
                         actions_t = torch.cat(actions, dim=-1)
-                        value_pred = self.critic.get_values(sp_share_obs, actions_t, agent_ids)
+                        value_pred = self.critic.get_values(sp_share_obs, actions_t, agent_ids_expanded)
                         actor_loss = -torch.mean(value_pred)
                         self.actor[agent_id].actor_optimizer.zero_grad()
                         actor_loss.backward()
                         self.actor[agent_id].actor_optimizer.step()
                         self.actor[agent_id].turn_off_grad()
                         actions[agent_id] = self.actor[agent_id].get_actions(
-                            sp_obs[agent_id], False, tensor_swapped, agent_ids
+                            sp_obs[agent_id], False, tensor_swapped, agent_ids_expanded
                         )
-                # soft update
+                # Soft update
                 for agent_id in range(self.num_agents):
                     self.actor[agent_id].soft_update()
             self.critic.soft_update()
+            actor_end_time = time.time()
+            actor_time = actor_end_time - actor_start_time
+            if debug:
+                print(f"Actor training took {actor_time:.6f} seconds")
