@@ -3,6 +3,7 @@ import itertools
 from copy import deepcopy
 import torch
 from harl.models.value_function_models.embd_value import EmbdValueNetwork
+from harl.models.value_function_models.continuous_q_net import ContinuousQNet
 from harl.utils.envs_tools import check
 from harl.utils.models_tools import update_linear_schedule
 
@@ -39,9 +40,14 @@ class TwinContinuousQCriticEmbd:
         new_args["embedding_dim"] = 14 #9
         new_args["output_dim"] = 1
         new_args["obs_dim_resized"] = 18
+
+        merged_dict = args.copy()
+        merged_dict.update(new_args)
+        print(f'merged_dict:{merged_dict}')
+       
         print(f'share_obs_space >> :{share_obs_space} act_space:{act_space} <<')
-        self.critic = EmbdValueNetwork(new_args, share_obs_space, act_space, device)
-        self.critic2 = EmbdValueNetwork(new_args, share_obs_space, act_space, device)
+        self.critic = EmbdValueNetwork(merged_dict, share_obs_space, act_space, device)
+        self.critic2 = EmbdValueNetwork(merged_dict, share_obs_space, act_space, device)
         self.target_critic = deepcopy(self.critic)
         self.target_critic2 = deepcopy(self.critic2)
         for param in self.target_critic.parameters():

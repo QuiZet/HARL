@@ -35,14 +35,10 @@ class EMBD(HATD3):
         args['input_dim'] = obs_shape[0]
         args['output_dim'] = act_dim
 
+        args["obs_space"] = obs_space
+        args["action_space"] = act_space
+
         # Modify the actor policy
-        # self.actor = EmbdPolicyNetwork(input_dim=obs_shape[0], 
-        #                                num_heads=4,
-        #                                num_policies=8,
-        #                                embedding_dim=14,
-        #                                output_dim=act_dim, 
-        #                                num_agents=args["num_agents"], 
-        #                                device=device)
         self.actor = EmbdPolicyNetwork(args, 
                                        device=device)
 
@@ -64,6 +60,7 @@ class EMBD(HATD3):
         #print(f'obs:{obs.shape} obs_all:{obs_all.shape} agent_ids:{agent_ids.shape}')
         #agent_ids = torch.arange(len(obs)).to(obs.device)
 
+        # actions = self.target_actor(obs, agent_ids)
         actions = self.target_actor(obs_all, agent_ids)
         noise = torch.randn_like(actions) * self.policy_noise * self.scale
         noise = torch.clamp(
@@ -93,6 +90,8 @@ class EMBD(HATD3):
         #print(f'obs:{obs.shape} obs_all:{obs_all.shape} agent_ids:{agent_ids.shape}')
         #exit(0)
         #agent_ids = torch.arange(len(obs)).to(obs.device)
+
+        # actions = self.actor(obs, agent_ids)
         actions = self.actor(obs_all, agent_ids)
         #print(f'actions s:{actions.shape}')
         if add_noise:

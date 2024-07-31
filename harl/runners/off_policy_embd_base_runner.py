@@ -239,7 +239,10 @@ class OffPolicyEmbdBaseRunner:
             self.algo_args["train"]["update_per_train"]
             * self.algo_args["train"]["train_interval"]
         )
+        debug = self.algo_args["train"]["debug"]
         for step in range(1, steps + 1):
+            step_start_time = time.time()
+            
             actions = self.get_actions(
                 obs, available_actions=available_actions, add_random=True
             )
@@ -277,7 +280,15 @@ class OffPolicyEmbdBaseRunner:
             obs = new_obs
             share_obs = new_share_obs
             available_actions = new_available_actions
+            
+            step_end_time = time.time()
+            step_time = step_end_time - step_start_time
+            if debug:
+                print(f"Step {step} took {step_time:.6f} seconds")
+            
             if step % self.algo_args["train"]["train_interval"] == 0:
+                train_start_time = time.time()
+                
                 if self.algo_args["train"]["use_linear_lr_decay"]:
                     if self.share_param:
                         self.actor[0].lr_decay(step, steps)
@@ -285,8 +296,16 @@ class OffPolicyEmbdBaseRunner:
                         for agent_id in range(self.num_agents):
                             self.actor[agent_id].lr_decay(step, steps)
                     self.critic.lr_decay(step, steps)
-                for _ in range(update_num):
+                for idx_update_num in range(update_num):
+                    if debug:
+                        print(f'idx_update_num:{idx_update_num}')
                     self.train()
+                
+                train_end_time = time.time()
+                train_time = train_end_time - train_start_time
+                if debug:
+                    print(f"Training at step {step} took {train_time:.6f} seconds")
+            
             if step % self.algo_args["train"]["eval_interval"] == 0:
                 cur_step = (
                     self.algo_args["train"]["warmup_steps"]
@@ -314,7 +333,6 @@ class OffPolicyEmbdBaseRunner:
                         self.log_file.flush()
                         self.done_episodes_rewards = []
                 self.save()
-
     def warmup(self):
         """Warmup the replay buffer with random actions"""
         warmup_steps = (
@@ -514,12 +532,14 @@ class OffPolicyEmbdBaseRunner:
                     )
         else:
             agent_ids = torch.arange(self.num_agents)
+            agent_ids_expanded = agent_ids.unsqueeze(0).expand(obs.shape[0], -1)  # (batch_size, num_agents)
             actions = []
             for agent_id in range(self.num_agents):
                 actions.append(
-                    _t2n(self.actor[agent_id].get_actions(obs[:, agent_id], add_random, np.squeeze(obs[:]), agent_ids))
+                    _t2n(self.actor[agent_id].get_actions(obs[:, agent_id], add_random, np.squeeze(obs[:]), agent_ids_expanded))
                 )
-            #print(f'actions:{actions}')
+            #print(f'actions:{np.array(actions).shape}')
+            # print(f'actions:{np.array(actions)}')
         return np.array(actions).transpose(1, 0, 2)
 
     def train(self):
