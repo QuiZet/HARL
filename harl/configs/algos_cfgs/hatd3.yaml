@@ -31,8 +31,8 @@ train:
   # whether to consider the case of truncation when an episode is done
   use_proper_time_limits: True
   # if set, load models from this directory; otherwise, randomly initialise the models
-  #model_dir: ~
-  model_dir: /home/moro/workspace/university/todai/Simon/HARL/results/pettingzoo_mpe/simple_spread_v2-continuous/hatd3/pzhaddpg/seed-00001-2024-07-05-13-07-59/models
+  model_dir: ~
+  #model_dir: /home/moro/workspace/university/todai/Simon/HARL/results/pettingzoo_mpe/simple_spread_v2-continuous/hatd3/pzhaddpg/seed-00001-2024-07-05-13-07-59/models
 eval:
   # whether to use evaluation
   use_eval: True
@@ -42,9 +42,9 @@ eval:
   eval_episodes: 40
 render:
   # whether to use render
-  use_render: True #False
+  use_render: False #False
   # number of episodes to render
-  render_episodes: 10
+  render_episodes: 360
 model:
   # network parameters
   # hidden sizes for mlp module in the network

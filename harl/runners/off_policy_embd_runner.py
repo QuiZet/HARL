@@ -250,9 +250,18 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
                         actor_loss.backward()
                         self.actor[agent_id].actor_optimizer.step()
                         self.actor[agent_id].turn_off_grad()
+
+                        #if self.total_it % (2*self.policy_freq) == 0:
+                        #    print(f'A agent_id[{agent_id}] actions:{actions[agent_id]} actor_loss:{actor_loss}')
+
                         actions[agent_id] = self.actor[agent_id].get_actions(
                             sp_obs[agent_id], False, tensor_swapped, agent_ids_expanded
                         )
+
+                        #if self.total_it % (2*self.policy_freq) == 0:
+                        #    print(f'B agent_id[{agent_id}] actions:{actions[agent_id]} actor_loss:{actor_loss}')
+
+
                 # Soft update
                 for agent_id in range(self.num_agents):
                     self.actor[agent_id].soft_update()

@@ -313,11 +313,18 @@ class EnsemblePolicyHeads(nn.Module):
     #     return averaged_policy_output
 
     def forward(self, z_i):
+        #print(f'EnsemblePolicyHeads z_i:{z_i}')
         z_i = torch.flatten(z_i, start_dim=1)  # (batch_size, num_agents * combined_dim)
         attention_weights = F.softmax(self.attention_layer(z_i), dim=1)
+        #print(f'EnsemblePolicyHeads attention_weights:{attention_weights}')
         
         policy_outputs = torch.stack([policy_block(z_i) for policy_block in self.policy_blocks], dim=1)  # (batch_size, num_policies, output_dim)
+        #print(f'EnsemblePolicyHeads policy_outputs:{policy_outputs}')
         weighted_policy_output = torch.sum(attention_weights.unsqueeze(-1) * policy_outputs, dim=1)  # (batch_size, output_dim)
+        #print(f'EnsemblePolicyHeads weighted_policy_output:{weighted_policy_output}')
+
+        # Apply sigmoid activation to ensure output is between 0 and 1
+        #weighted_policy_output = torch.tanh(weighted_policy_output)
         return weighted_policy_output
 
 
@@ -348,7 +355,7 @@ class EmbdPolicyNetwork(nn.Module):
         output_dim = args["output_dim"]
         obs_dim_resized = args["obs_dim_resized"]
         # share from an existing model
-        if 'model' in args:
+        if False and 'model' in args:
             print('EmdbPolicyNetwork shared')
             model = args['model']
             self.feature_extractor = model.feature_extractor
@@ -361,7 +368,8 @@ class EmbdPolicyNetwork(nn.Module):
             args_new = {
                 "hidden_sizes": [128, 128],
                 "activation_func": nn.ReLU,
-                "final_activation_func": nn.Identity
+                #"final_activation_func": nn.Identity
+                "final_activation_func": nn.Tanh
             }
             self.feature_extractor = FeatureExtractor(obs_dim=input_dim, mlp_hidden_dim=obs_dim_resized, 
                                                       embedding_dim=embedding_dim, attention_heads=num_heads, num_agents=num_agents)
@@ -407,5 +415,12 @@ class EmbdPolicyNetwork(nn.Module):
         z_i = self.feature_extractor(obs, agent_ids)  # (batch_size, num_agents, combined_dim)
         #x = self.pi(z_i)
         x = self.ensemble_policy_heads(z_i)
-        x = self.scale * x + self.mean
+        #x = self.scale * x + self.mean
+
+        #x = torch.sigmoid(x)
+
+        # Output clipping
+        #x = torch.clamp(x, min=0.0, max=1.0)
+        #x = torch.clamp(x, min=-1.0, max=1.0)
+
         return x

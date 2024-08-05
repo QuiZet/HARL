@@ -13,7 +13,7 @@ device:
   torch_threads: 4
 train:
   # number of parallel environments for training data collection
-  n_rollout_threads: 10 #10
+  n_rollout_threads: 40 #10 #10
   # number of total steps
   num_env_steps: 10000000
   # number of warmup steps
@@ -33,6 +33,7 @@ train:
   # if set, load models from this directory; otherwise, randomly initialise the models
   model_dir: ~
   #model_dir: "/home/moro/workspace/university/todai/Simon/HARL/results/pettingzoo_mpe/simple_spread_v2-continuous/embd/embd/seed-00001-2024-07-18-16-38-12/models"  
+  #model_dir: "/home/moro/workspace/university/todai/Simon/HARL/results/seed-00001-2024-07-18-16-38-12/models"
   debug: False
 eval:
   # whether to use evaluation
@@ -43,7 +44,7 @@ eval:
   eval_episodes: 40
 render:
   # whether to use render
-  use_render: False
+  use_render: False #True #False
   # number of episodes to render
   render_episodes: 10
 model:
