@@ -47,6 +47,9 @@ class EMBD(HATD3):
             p.requires_grad = False
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.lr)
 
+        self.iter = 0
+        self.iter_target = 0
+
     def get_target_actions(self, obs, obs_all, agent_ids):
         """Get target actor actions for observations.
         Args:
@@ -69,6 +72,11 @@ class EMBD(HATD3):
         actions += noise
         actions = torch.clamp(actions, self.low, self.high)
         #print(f'actions:{actions.shape} obs:{obs.shape}')
+
+        # if self.iter_target % 100 == 0:
+        #     print(f'target actions:{actions}')
+
+        self.iter_target += 1
         return actions
 
     def get_actions(self, obs, add_noise, obs_all, agent_ids):
@@ -98,4 +106,9 @@ class EMBD(HATD3):
             actions += torch.randn_like(actions) * self.expl_noise * self.scale
             actions = torch.clamp(actions, self.low, self.high)
         #print(f'actions:{actions}')
+
+        # if self.iter_target % 100 == 0:
+        #     print(f'actions:{actions}')
+
+        self.iter += 1
         return actions
