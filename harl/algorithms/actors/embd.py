@@ -13,6 +13,8 @@ from harl.utils.envs_tools import get_shape_from_obs_space
 
 import inspect
 
+import einops
+
 class EMBD(HATD3):
     def __init__(self, args, obs_space, act_space, device=torch.device("cpu")):
         print('EMBD')
@@ -32,11 +34,15 @@ class EMBD(HATD3):
         print(f'obs_shape:{obs_shape} {obs_shape[0]}')
         print(f'act_dim:{act_dim}')
         # Add I/O
-        args['input_dim'] = obs_shape[0]
+        self.num_agents = args['num_agents']
+        args['input_dim'] = obs_shape[0] //  args['num_agents']
+        #args['input_dim'] = obs_shape[0]
         args['output_dim'] = act_dim
 
         args["obs_space"] = obs_space
         args["action_space"] = act_space
+
+        self.agent_id = args['agent_id']
 
         # Modify the actor policy
         self.actor = EmbdPolicyNetwork(args, 
@@ -62,9 +68,16 @@ class EMBD(HATD3):
         agent_ids = check(agent_ids).to(obs_all.device)
         #print(f'obs:{obs.shape} obs_all:{obs_all.shape} agent_ids:{agent_ids.shape}')
         #agent_ids = torch.arange(len(obs)).to(obs.device)
+        #print(f'get_target_actions agent_ids:{agent_ids}')
 
-        # actions = self.target_actor(obs, agent_ids)
-        actions = self.target_actor(obs_all, agent_ids)
+        #print(f'obs:{obs.shape} obs_all:{obs_all.shape} agent_ids {agent_ids.shape}')
+        obs_rearrange = einops.rearrange(obs, 'b (n l) -> b n l', n=self.num_agents)
+        #print(f'obs_rearrange:{obs_rearrange.shape}')
+
+        #actions = self.target_actor(obs, agent_ids)
+        actions = self.target_actor(obs_rearrange, agent_ids)
+        #actions = self.target_actor(obs_all[:,self.agent_id,:], agent_ids)
+        #actions = self.target_actor(obs_all, agent_ids)
         noise = torch.randn_like(actions) * self.policy_noise * self.scale
         noise = torch.clamp(
             noise, -self.noise_clip * self.scale, self.noise_clip * self.scale
@@ -89,6 +102,8 @@ class EMBD(HATD3):
         """
         #print(f'EMBD::get_actions :{inspect.stack()[1].function}')
         #print(f'obs_all:{len(obs_all)} agent_ids {agent_ids}')
+        #print(f'obs_all:{obs_all.shape} agent_ids {agent_ids.shape}')
+        #print(f'get_actions agent_ids:{agent_ids}')
 
         obs = check(obs).to(**self.tpdv)
         obs_all = check(obs_all).to(**self.tpdv)
@@ -99,8 +114,14 @@ class EMBD(HATD3):
         #exit(0)
         #agent_ids = torch.arange(len(obs)).to(obs.device)
 
-        # actions = self.actor(obs, agent_ids)
-        actions = self.actor(obs_all, agent_ids)
+        #print(f'obs:{obs.shape} obs_all:{obs_all.shape} agent_ids {agent_ids.shape}')
+        obs_rearrange = einops.rearrange(obs, 'b (n l) -> b n l', n=self.num_agents)
+        #print(f'obs_rearrange:{obs_rearrange.shape}')
+
+        #actions = self.actor(obs, agent_ids)
+        actions = self.actor(obs_rearrange, agent_ids)
+        #actions = self.actor(obs_all[:,self.agent_id,:], agent_ids)
+        #actions = self.actor(obs_all, agent_ids)
         #print(f'actions s:{actions.shape}')
         if add_noise:
             actions += torch.randn_like(actions) * self.expl_noise * self.scale
