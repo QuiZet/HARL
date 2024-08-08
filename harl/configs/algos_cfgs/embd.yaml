@@ -39,8 +39,8 @@ train:
   # original shape (ok)
   #model_dir: "/home/moro/workspace/university/todai/Simon/HARL/results/pettingzoo_mpe/simple_spread_v2-continuous/embd/embd/seed-00001-2024-08-06-04-48-39/models"
 
-  #model_dir: "/home/moro/workspace/university/todai/Simon/HARL/results/pettingzoo_mpe/simple_spread_v2-continuous/embd/embd/seed-00001-2024-08-06-15-11-44/models"
-
+  #model_dir: "/home/moro/workspace/university/todai/Simon/HARL/results/pettingzoo_mpe/simple_spread_v2-continuous/embd/embd/seed-00001-2024-08-06-18-04-05/models"
+  
   debug: True #False
 eval:
   # whether to use evaluation
@@ -87,7 +87,7 @@ algo:
   # the number of steps to look ahead
   n_step: 1
   # whether to share parameter among actors
-  share_param: False
+  share_param: True #False
   # whether to use a fixed optimisation order
   fixed_order: False
 logger:

@@ -387,10 +387,10 @@ class EmbdPolicyNetwork(nn.Module):
                                                              output_dim=output_dim, num_policies=num_policies)
 
         self.tpdv = dict(dtype=torch.float32, device=device)
-        hidden_sizes = args["hidden_sizes"]
-        activation_func = args["activation_func"]
-        final_activation_func = args["final_activation_func"]
-        obs_shape = get_shape_from_obs_space(obs_space)
+        # hidden_sizes = args["hidden_sizes"]
+        # activation_func = args["activation_func"]
+        # final_activation_func = args["final_activation_func"]
+        # obs_shape = get_shape_from_obs_space(obs_space)
         # if len(obs_shape) == 3:
         #     self.feature_extractor = PlainCNN(
         #         obs_shape, hidden_sizes[0], activation_func
@@ -402,10 +402,10 @@ class EmbdPolicyNetwork(nn.Module):
         # act_dim = action_space.shape[0]
         # pi_sizes = [feature_dim] + list(hidden_sizes) + [act_dim]
 
-        act_dim = action_space.shape[0]
-        pi_sizes = [obs_dim_resized] + list(hidden_sizes) + [act_dim]
-        print(f'pi_size:{pi_sizes}')
-        self.pi = PlainMLP(pi_sizes, activation_func, final_activation_func)
+        # act_dim = action_space.shape[0]
+        # pi_sizes = [obs_dim_resized] + list(hidden_sizes) + [act_dim]
+        # print(f'pi_size:{pi_sizes}')
+        # self.pi = PlainMLP(pi_sizes, activation_func, final_activation_func)
         low = torch.tensor(action_space.low).to(**self.tpdv)
         high = torch.tensor(action_space.high).to(**self.tpdv)
         self.scale = (high - low) / 2
@@ -425,7 +425,7 @@ class EmbdPolicyNetwork(nn.Module):
         z_i = self.feature_extractor(obs, agent_ids)  # (batch_size, num_agents, combined_dim)
         #x = self.pi(z_i)
         x = self.ensemble_policy_heads(z_i)
-        #x = self.scale * x + self.mean
+        x = self.scale * x + self.mean
 
         #x = torch.sigmoid(x)
 

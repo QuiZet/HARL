@@ -96,6 +96,82 @@ class TwinContinuousQCriticEmbd:
         actions = check(actions).to(**self.tpdv)
         return self.critic(share_obs, actions, agent_ids.to(share_obs.device))
 
+    # def train(
+    #     self,
+    #     share_obs,
+    #     actions,
+    #     reward,
+    #     done,
+    #     term,
+    #     next_share_obs,
+    #     next_actions,
+    #     gamma,
+    # ):
+    #     """Train the critic.
+    #     Args:
+    #         share_obs: (np.ndarray) shape is (batch_size, dim)
+    #         actions: (np.ndarray) shape is (n_agents, batch_size, dim)
+    #         reward: (np.ndarray) shape is (batch_size, 1)
+    #         done: (np.ndarray) shape is (batch_size, 1)
+    #         term: (np.ndarray) shape is (batch_size, 1)
+    #         next_share_obs: (np.ndarray) shape is (batch_size, dim)
+    #         next_actions: (np.ndarray) shape is (n_agents, batch_size, dim)
+    #         gamma: (np.ndarray) shape is (batch_size, 1)
+    #     """
+    #     assert share_obs.__class__.__name__ == "ndarray"
+    #     assert actions.__class__.__name__ == "ndarray"
+    #     assert reward.__class__.__name__ == "ndarray"
+    #     assert done.__class__.__name__ == "ndarray"
+    #     assert term.__class__.__name__ == "ndarray"
+    #     assert next_share_obs.__class__.__name__ == "ndarray"
+    #     assert gamma.__class__.__name__ == "ndarray"
+    #     share_obs = check(share_obs).to(**self.tpdv)
+    #     actions = check(actions).to(**self.tpdv)
+    #     actions = torch.cat([actions[i] for i in range(actions.shape[0])], dim=-1)
+    #     reward = check(reward).to(**self.tpdv)
+    #     done = check(done).to(**self.tpdv)
+    #     term = check(term).to(**self.tpdv)
+    #     gamma = check(gamma).to(**self.tpdv)
+    #     next_share_obs = check(next_share_obs).to(**self.tpdv)
+
+    #     #print(f'CriticEmbd::train share_obs:{share_obs.shape} actions:{actions.shape}')
+    #     agent_ids = torch.arange(self.num_agents).to(share_obs.device)
+    #     agent_ids_expanded = agent_ids.unsqueeze(0).expand(share_obs.shape[0], -1)  # (batch_size, num_agents)
+    #     #print(f'CriticEmbd::train agent_ids_expanded:{agent_ids_expanded.shape}')
+
+    #     next_actions = torch.cat(next_actions, dim=-1).to(**self.tpdv)
+    #     print('target_critic')
+    #     next_q_values1 = self.target_critic(next_share_obs, next_actions, agent_ids_expanded)
+    #     print('target_critic2')
+    #     next_q_values2 = self.target_critic2(next_share_obs, next_actions, agent_ids_expanded)
+    #     #print(f'CriticEmbd::target_critic next_actions:{next_share_obs.shape} next_actions:{next_actions.shape}')
+    #     #print(f'CriticEmbd::next_q_values1:{next_q_values1.shape} next_q_values2:{next_q_values2.shape}')
+    #     next_q_values = torch.min(next_q_values1, next_q_values2)
+    #     if self.use_proper_time_limits:
+    #         q_targets = reward + gamma * next_q_values * (1 - term)
+    #     else:
+    #         q_targets = reward + gamma * next_q_values * (1 - done)
+    #     print('critic')
+    #     critic_loss1 = torch.mean(
+    #         torch.nn.functional.mse_loss(self.critic(share_obs, actions, agent_ids_expanded), q_targets)
+    #     )
+    #     print('critic2')
+    #     critic_loss2 = torch.mean(
+    #         torch.nn.functional.mse_loss(self.critic2(share_obs, actions, agent_ids_expanded), q_targets)
+    #     )
+    #     critic_loss = critic_loss1 + critic_loss2
+    #     self.critic_optimizer.zero_grad()
+    #     critic_loss.backward()
+
+    #     # Add gradient clipping here (for the new model)
+    #     torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
+    #     torch.nn.utils.clip_grad_norm_(self.critic2.parameters(), max_norm=1.0)
+
+    #     self.critic_optimizer.step()
+
+
+
+
     def train(
         self,
         share_obs,
@@ -107,17 +183,7 @@ class TwinContinuousQCriticEmbd:
         next_actions,
         gamma,
     ):
-        """Train the critic.
-        Args:
-            share_obs: (np.ndarray) shape is (batch_size, dim)
-            actions: (np.ndarray) shape is (n_agents, batch_size, dim)
-            reward: (np.ndarray) shape is (batch_size, 1)
-            done: (np.ndarray) shape is (batch_size, 1)
-            term: (np.ndarray) shape is (batch_size, 1)
-            next_share_obs: (np.ndarray) shape is (batch_size, dim)
-            next_actions: (np.ndarray) shape is (n_agents, batch_size, dim)
-            gamma: (np.ndarray) shape is (batch_size, 1)
-        """
+        """Train the critic."""
         assert share_obs.__class__.__name__ == "ndarray"
         assert actions.__class__.__name__ == "ndarray"
         assert reward.__class__.__name__ == "ndarray"
@@ -125,6 +191,7 @@ class TwinContinuousQCriticEmbd:
         assert term.__class__.__name__ == "ndarray"
         assert next_share_obs.__class__.__name__ == "ndarray"
         assert gamma.__class__.__name__ == "ndarray"
+
         share_obs = check(share_obs).to(**self.tpdv)
         actions = check(actions).to(**self.tpdv)
         actions = torch.cat([actions[i] for i in range(actions.shape[0])], dim=-1)
@@ -134,29 +201,55 @@ class TwinContinuousQCriticEmbd:
         gamma = check(gamma).to(**self.tpdv)
         next_share_obs = check(next_share_obs).to(**self.tpdv)
 
-        #print(f'CriticEmbd::train share_obs:{share_obs.shape} actions:{actions.shape}')
         agent_ids = torch.arange(self.num_agents).to(share_obs.device)
+        agent_ids_expanded = agent_ids.unsqueeze(0).expand(share_obs.shape[0], -1)  # (batch_size, num_agents)
 
         next_actions = torch.cat(next_actions, dim=-1).to(**self.tpdv)
-        next_q_values1 = self.target_critic(next_share_obs, next_actions, agent_ids)
-        next_q_values2 = self.target_critic2(next_share_obs, next_actions, agent_ids)
-        #print(f'CriticEmbd::target_critic next_actions:{next_share_obs.shape} next_actions:{next_actions.shape}')
-        #print(f'CriticEmbd::next_q_values1:{next_q_values1.shape} next_q_values2:{next_q_values2.shape}')
+
+        # Check for NaNs
+        def has_nan(tensor):
+            return torch.isnan(tensor).any().item()
+        if has_nan(share_obs) or has_nan(actions) or has_nan(next_share_obs) or has_nan(next_actions):
+            print("NaN detected in input tensors")
+            return
+
+        #print('target_critic')
+        next_q_values1 = self.target_critic(next_share_obs, next_actions, agent_ids_expanded)
+        #print(f'next_q_values1: {next_q_values1}')
+        #print('target_critic2')
+        next_q_values2 = self.target_critic2(next_share_obs, next_actions, agent_ids_expanded)
+        #print(f'next_q_values2: {next_q_values2}')
+
         next_q_values = torch.min(next_q_values1, next_q_values2)
         if self.use_proper_time_limits:
             q_targets = reward + gamma * next_q_values * (1 - term)
         else:
             q_targets = reward + gamma * next_q_values * (1 - done)
+
+        #print('critic')
+        current_q_values1 = self.critic(share_obs, actions, agent_ids_expanded)
+        #print(f'current_q_values1: {current_q_values1}')
+        #print('critic2')
+        current_q_values2 = self.critic2(share_obs, actions, agent_ids_expanded)
+        #print(f'current_q_values2: {current_q_values2}')
+
         critic_loss1 = torch.mean(
-            torch.nn.functional.mse_loss(self.critic(share_obs, actions, agent_ids), q_targets)
-        )
+            torch.nn.functional.mse_loss(current_q_values1, q_targets)
+        ) + 1e-4 * sum(p.pow(2.0).sum() for p in self.critic.parameters())
         critic_loss2 = torch.mean(
-            torch.nn.functional.mse_loss(self.critic2(share_obs, actions, agent_ids), q_targets)
-        )
+            torch.nn.functional.mse_loss(current_q_values2, q_targets)
+        ) + 1e-4 * sum(p.pow(2.0).sum() for p in self.critic2.parameters())
         critic_loss = critic_loss1 + critic_loss2
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
+
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.critic2.parameters(), max_norm=1.0)
+
         self.critic_optimizer.step()
+        #print(f"Critic loss1: {critic_loss1.item()}, Critic loss2: {critic_loss2.item()}, Total Critic loss: {critic_loss.item()}")
+
+
 
     def save(self, save_dir):
         """Save the model parameters."""

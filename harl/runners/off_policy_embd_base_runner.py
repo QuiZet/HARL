@@ -107,8 +107,17 @@ class OffPolicyEmbdBaseRunner:
 
         if self.share_param:
             self.actor = []
+            additional_args = dict()
+            additional_args['agent_id'] = 0
+            additional_args['num_agents'] = self.num_agents
+            additional_args["num_heads"] = 4
+            additional_args["num_policies"] = 4
+            additional_args["embedding_dim"] = 14
+            additional_args["obs_dim_resized"] = 18
+
             agent = ALGO_REGISTRY[args["algo"]](
-                {**algo_args["model"], **algo_args["algo"]},
+                #{**algo_args["model"], **algo_args["algo"]},
+                {**algo_args["model"], **algo_args["algo"], **additional_args},
                 self.envs.observation_space[0],
                 self.envs.action_space[0],
                 device=self.device,
@@ -143,6 +152,7 @@ class OffPolicyEmbdBaseRunner:
                 self.actor.append(agent)
                 if agent_id == 0:
                     additional_args['model'] = agent.actor
+            exit(0)
 
         if not self.algo_args["render"]["use_render"]:
             self.critic = CRITIC_REGISTRY[args["algo"]](

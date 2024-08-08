@@ -284,8 +284,17 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
 
 
                 # Soft update
+                # The method soft_update is responsible for updating the target networks. 
+                # This method uses the polyak averaging technique, where the parameters 
+                # of the target networks are slowly adjusted towards the parameters 
+                # of the main networks.
                 for agent_id in range(self.num_agents):
                     self.actor[agent_id].soft_update()
+
+            # The method soft_update is responsible for updating the target networks. 
+            # This method uses the polyak averaging technique, where the parameters 
+            # of the target networks are slowly adjusted towards the parameters 
+            # of the main networks.
             self.critic.soft_update()
             actor_end_time = time.time()
             actor_time = actor_end_time - actor_start_time
