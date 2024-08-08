@@ -237,11 +237,31 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
                     #agent_ids = torch.arange(self.num_agents) # error, it does not preserve the permutation
                     agent_ids = torch.as_tensor(agent_order)
                     agent_ids_expanded = agent_ids.unsqueeze(0).expand(sp_next_obs.shape[1], -1)  # (batch_size, num_agents)
+
+                    # Ensure agent_ids are within the range of the second dimension of obs_all
+                    #print(f'torch.max(agent_ids_expanded):{torch.max(agent_ids_expanded)}')  # Should be torch.Size([1000, 3, 18])
+                    #print(f'sp_obs.size(1):{sp_obs.shape} tensor_swapped:{tensor_swapped.shape}')  # Should be torch.Size([1000, 3, 18])
+                    assert torch.max(agent_ids_expanded) < tensor_swapped.shape[1], "agent_ids contain indices out of range for obs_all"
+                    #print(f'agent_ids_expanded:{agent_ids_expanded.shape}')  # Should be torch.Size([1000, 3, 18])
+                    tensor_swapped = torch.Tensor(tensor_swapped).to(agent_ids_expanded.device)
+                    #print(f'tensor_swapped:{type(tensor_swapped)} agent_ids_expanded:{type(agent_ids_expanded)}')
+                    # Reorder obs_all based on agent_ids
+                    agent_ids_expanded_gather = agent_ids_expanded.unsqueeze(-1).expand(-1, -1, tensor_swapped.shape[2])
+                    #print(f'agent_ids_expanded:{agent_ids_expanded.shape}')  # Should be torch.Size([1000, 3, 18])
+                    reordered_tensor_swapped = tensor_swapped.gather(1, agent_ids_expanded_gather)
+                    #print(f'sp_share_obs{sp_share_obs.shape} reordered_obs_all:{reordered_obs_all.shape}')  # Should be torch.Size([1000, 3, 18])
+                    #print(f'agent_ids_expanded{agent_ids_expanded}')
+                    #print(f'tensor_swapped{tensor_swapped} reordered_obs_all:{reordered_obs_all}')  # Should be torch.Size([1000, 3, 18])
+
                     for agent_id in agent_order:
+                        #print(f'agent_id:{agent_id}')
+                        #print(f'sp_obs{sp_obs.shape} reordered_tensor_swapped:{reordered_tensor_swapped.shape} agent_ids_expanded:{agent_ids_expanded.shape}')  # Should be torch.Size([1000, 3, 18])
+
                         self.actor[agent_id].turn_on_grad()
                         # Train this agent
                         actions[agent_id] = self.actor[agent_id].get_actions(
-                            sp_obs[agent_id], False, tensor_swapped, agent_ids_expanded
+                        #    sp_obs[agent_id], False, reordered_tensor_swapped, agent_ids_expanded
+                            reordered_tensor_swapped[:, agent_id, :], False, reordered_tensor_swapped, agent_ids_expanded
                         )
                         actions_t = torch.cat(actions, dim=-1)
                         value_pred = self.critic.get_values(sp_share_obs, actions_t, agent_ids_expanded)
@@ -255,7 +275,8 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
                         #    print(f'A agent_id[{agent_id}] actions:{actions[agent_id]} actor_loss:{actor_loss}')
 
                         actions[agent_id] = self.actor[agent_id].get_actions(
-                            sp_obs[agent_id], False, tensor_swapped, agent_ids_expanded
+                        #    sp_obs[agent_id], False, reordered_tensor_swapped, agent_ids_expanded
+                            reordered_tensor_swapped[:, agent_id, :], False, reordered_tensor_swapped, agent_ids_expanded
                         )
 
                         #if self.total_it % (2*self.policy_freq) == 0:
@@ -263,8 +284,17 @@ class OffPolicyEmbdRunner(OffPolicyEmbdBaseRunner):
 
 
                 # Soft update
+                # The method soft_update is responsible for updating the target networks. 
+                # This method uses the polyak averaging technique, where the parameters 
+                # of the target networks are slowly adjusted towards the parameters 
+                # of the main networks.
                 for agent_id in range(self.num_agents):
                     self.actor[agent_id].soft_update()
+
+            # The method soft_update is responsible for updating the target networks. 
+            # This method uses the polyak averaging technique, where the parameters 
+            # of the target networks are slowly adjusted towards the parameters 
+            # of the main networks.
             self.critic.soft_update()
             actor_end_time = time.time()
             actor_time = actor_end_time - actor_start_time

@@ -107,8 +107,17 @@ class OffPolicyEmbdBaseRunner:
 
         if self.share_param:
             self.actor = []
+            additional_args = dict()
+            additional_args['agent_id'] = 0
+            additional_args['num_agents'] = self.num_agents
+            additional_args["num_heads"] = 4
+            additional_args["num_policies"] = 4
+            additional_args["embedding_dim"] = 14
+            additional_args["obs_dim_resized"] = 18
+
             agent = ALGO_REGISTRY[args["algo"]](
-                {**algo_args["model"], **algo_args["algo"]},
+                #{**algo_args["model"], **algo_args["algo"]},
+                {**algo_args["model"], **algo_args["algo"], **additional_args},
                 self.envs.observation_space[0],
                 self.envs.action_space[0],
                 device=self.device,
@@ -143,6 +152,7 @@ class OffPolicyEmbdBaseRunner:
                 self.actor.append(agent)
                 if agent_id == 0:
                     additional_args['model'] = agent.actor
+            exit(0)
 
         if not self.algo_args["render"]["use_render"]:
             self.critic = CRITIC_REGISTRY[args["algo"]](
@@ -240,6 +250,8 @@ class OffPolicyEmbdBaseRunner:
             * self.algo_args["train"]["train_interval"]
         )
         debug = self.algo_args["train"]["debug"]
+
+        step_time_sum = 0
         for step in range(1, steps + 1):
             step_start_time = time.time()
             
@@ -283,8 +295,10 @@ class OffPolicyEmbdBaseRunner:
             
             step_end_time = time.time()
             step_time = step_end_time - step_start_time
-            if debug:
-                print(f"Step {step} took {step_time:.6f} seconds")
+            step_time_sum += step_time
+            if debug and step % 1000 == 0:
+                print(f"Step {step} took {step_time:.6f} seconds. step_time_sum:{step_time_sum:.6f} seconds ")
+                step_time_sum = 0
             
             if step % self.algo_args["train"]["train_interval"] == 0:
                 train_start_time = time.time()
@@ -297,16 +311,17 @@ class OffPolicyEmbdBaseRunner:
                             self.actor[agent_id].lr_decay(step, steps)
                     self.critic.lr_decay(step, steps)
                 for idx_update_num in range(update_num):
-                    if debug:
+                    if debug and step % 1000 == 0:
                         print(f'idx_update_num:{idx_update_num}')
                     self.train()
                 
                 train_end_time = time.time()
                 train_time = train_end_time - train_start_time
-                if debug:
+                if debug and step % 1000 == 0:
                     print(f"Training at step {step} took {train_time:.6f} seconds")
             
             if step % self.algo_args["train"]["eval_interval"] == 0:
+                eval_start_time = time.time()
                 cur_step = (
                     self.algo_args["train"]["warmup_steps"]
                     + step * self.algo_args["train"]["n_rollout_threads"]
@@ -333,6 +348,11 @@ class OffPolicyEmbdBaseRunner:
                         self.log_file.flush()
                         self.done_episodes_rewards = []
                 self.save()
+                eval_end_time = time.time()
+                eval_time = eval_end_time - eval_start_time
+                if debug and step % 1000 == 0:
+                    print(f"Eval at step {step} took {eval_time:.6f} seconds")
+
     def warmup(self):
         """Warmup the replay buffer with random actions"""
         warmup_steps = (

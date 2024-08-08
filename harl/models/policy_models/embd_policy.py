@@ -2,6 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+from harl.utils.envs_tools import get_shape_from_obs_space
+from harl.models.base.plain_cnn import PlainCNN
+from harl.models.base.plain_mlp import PlainMLP
+
 class MLP(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
         super(MLP, self).__init__()
@@ -31,11 +36,17 @@ class SelfAttention(nn.Module):
         return attn_output
 
 class FeatureExtractor(nn.Module):
-    def __init__(self, obs_dim, mlp_hidden_dim, embedding_dim, num_agents, attention_heads):
+    def __init__(self, args, obs_dim, mlp_hidden_dim, embedding_dim, num_agents, attention_heads):
         super(FeatureExtractor, self).__init__()
         self.mlp_hidden_dim = mlp_hidden_dim
         self.embedding_dim = embedding_dim
         self.attention_heads = attention_heads
+
+
+        self.hidden_sizes = args["hidden_sizes"]
+        self.activation_func = args["activation_func"]
+        self.final_activation_func = args["final_activation_func"]
+        self.pi_sizes = [obs_dim] + list(self.hidden_sizes) + [self.mlp_hidden_dim]
 
         self.initialize_layers(obs_dim, num_agents)
 
@@ -44,10 +55,12 @@ class FeatureExtractor(nn.Module):
         self.num_agents = num_agents
 
         if hasattr(self, 'mlp') and freeze_existing:
-            new_mlp = MLP(obs_dim, self.mlp_hidden_dim, self.mlp_hidden_dim)
+            #new_mlp = MLP(obs_dim, self.mlp_hidden_dim, self.mlp_hidden_dim)
+            new_mlp = PlainMLPNew(self.pi_sizes, self.activation_func, self.final_activation_func)
             self.mlp = self.copy_weights(self.mlp, new_mlp)
         else:
-            self.mlp = MLP(obs_dim, self.mlp_hidden_dim, self.mlp_hidden_dim)
+            #self.mlp = MLP(obs_dim, self.mlp_hidden_dim, self.mlp_hidden_dim)
+            self.mlp = PlainMLPNew(self.pi_sizes, self.activation_func, self.final_activation_func)
 
         if hasattr(self, 'embedding') and freeze_existing:
             new_embedding = AgentEmbedding(num_agents, self.embedding_dim)
@@ -202,10 +215,6 @@ class EmbdPolicyNetwork(nn.Module):
 
 
 
-from harl.utils.envs_tools import get_shape_from_obs_space
-from harl.models.base.plain_cnn import PlainCNN
-from harl.models.base.plain_mlp import PlainMLP
-
 # class EmbdPolicyNetwork(nn.Module):
 #     """Deterministic policy network for continuous action space."""
 
@@ -355,7 +364,7 @@ class EmbdPolicyNetwork(nn.Module):
         output_dim = args["output_dim"]
         obs_dim_resized = args["obs_dim_resized"]
         # share from an existing model
-        if False and 'model' in args:
+        if 'model' in args:
             print('EmdbPolicyNetwork shared')
             model = args['model']
             self.feature_extractor = model.feature_extractor
@@ -371,17 +380,17 @@ class EmbdPolicyNetwork(nn.Module):
                 #"final_activation_func": nn.Identity
                 "final_activation_func": nn.Tanh
             }
-            self.feature_extractor = FeatureExtractor(obs_dim=input_dim, mlp_hidden_dim=obs_dim_resized, 
+            self.feature_extractor = FeatureExtractor(args=args_new, obs_dim=input_dim, mlp_hidden_dim=obs_dim_resized, 
                                                       embedding_dim=embedding_dim, attention_heads=num_heads, num_agents=num_agents)
             self.ensemble_policy_heads = EnsemblePolicyHeads(args=args_new,
                                                              input_dim=obs_dim_resized, 
                                                              output_dim=output_dim, num_policies=num_policies)
 
         self.tpdv = dict(dtype=torch.float32, device=device)
-        hidden_sizes = args["hidden_sizes"]
-        activation_func = args["activation_func"]
-        final_activation_func = args["final_activation_func"]
-        obs_shape = get_shape_from_obs_space(obs_space)
+        # hidden_sizes = args["hidden_sizes"]
+        # activation_func = args["activation_func"]
+        # final_activation_func = args["final_activation_func"]
+        # obs_shape = get_shape_from_obs_space(obs_space)
         # if len(obs_shape) == 3:
         #     self.feature_extractor = PlainCNN(
         #         obs_shape, hidden_sizes[0], activation_func
@@ -393,10 +402,10 @@ class EmbdPolicyNetwork(nn.Module):
         # act_dim = action_space.shape[0]
         # pi_sizes = [feature_dim] + list(hidden_sizes) + [act_dim]
 
-        act_dim = action_space.shape[0]
-        pi_sizes = [obs_dim_resized] + list(hidden_sizes) + [act_dim]
-        print(f'pi_size:{pi_sizes}')
-        self.pi = PlainMLP(pi_sizes, activation_func, final_activation_func)
+        # act_dim = action_space.shape[0]
+        # pi_sizes = [obs_dim_resized] + list(hidden_sizes) + [act_dim]
+        # print(f'pi_size:{pi_sizes}')
+        # self.pi = PlainMLP(pi_sizes, activation_func, final_activation_func)
         low = torch.tensor(action_space.low).to(**self.tpdv)
         high = torch.tensor(action_space.high).to(**self.tpdv)
         self.scale = (high - low) / 2
@@ -404,6 +413,7 @@ class EmbdPolicyNetwork(nn.Module):
         self.to(device)
 
     def forward(self, obs, agent_ids):
+        #print(f'obs:{obs.shape}')
         # Return output from network scaled to action space limits.
         # if self.feature_extractor is not None:
         #     x = self.feature_extractor(obs)
@@ -415,7 +425,7 @@ class EmbdPolicyNetwork(nn.Module):
         z_i = self.feature_extractor(obs, agent_ids)  # (batch_size, num_agents, combined_dim)
         #x = self.pi(z_i)
         x = self.ensemble_policy_heads(z_i)
-        #x = self.scale * x + self.mean
+        x = self.scale * x + self.mean
 
         #x = torch.sigmoid(x)
 
@@ -423,4 +433,67 @@ class EmbdPolicyNetwork(nn.Module):
         #x = torch.clamp(x, min=0.0, max=1.0)
         #x = torch.clamp(x, min=-1.0, max=1.0)
 
+        #print(f'x:{x.shape}')
         return x
+    
+
+
+
+# class EmbdPolicyNetwork(nn.Module):
+#     """Deterministic policy network for continuous action space."""
+
+#     def __init__(self, args, device=torch.device("cpu")):
+#         """Initialize DeterministicPolicy model.
+#         Args:
+#             args: (dict) arguments containing relevant model information.
+#             obs_space: (gym.Space) observation space.
+#             action_space: (gym.Space) action space.
+#             device: (torch.device) specifies the device to run on (cpu/gpu).
+#         """
+#         print('>>> Temporary EmbdPolicyNetwork')
+#         super().__init__()
+
+#         obs_space = args["obs_space"]
+#         action_space = args["action_space"]
+
+#         input_dim = args["input_dim"]
+#         num_heads = args["num_heads"]
+#         num_agents = args["num_agents"]
+#         num_policies = args["num_policies"]
+#         embedding_dim = args["embedding_dim"]
+#         output_dim = args["output_dim"]
+#         obs_dim_resized = args["obs_dim_resized"]
+
+#         self.tpdv = dict(dtype=torch.float32, device=device)
+#         hidden_sizes = args["hidden_sizes"]
+#         activation_func = args["activation_func"]
+#         final_activation_func = args["final_activation_func"]
+#         obs_shape = get_shape_from_obs_space(obs_space)
+#         if len(obs_shape) == 3:
+#             self.feature_extractor = PlainCNN(
+#                 obs_shape, hidden_sizes[0], activation_func
+#             )
+#             feature_dim = hidden_sizes[0]
+#         else:
+#             self.feature_extractor = None
+#             feature_dim = obs_shape[0]
+#         act_dim = action_space.shape[0]
+#         pi_sizes = [feature_dim] + list(hidden_sizes) + [act_dim]
+#         self.pi = PlainMLP(pi_sizes, activation_func, final_activation_func)
+#         low = torch.tensor(action_space.low).to(**self.tpdv)
+#         high = torch.tensor(action_space.high).to(**self.tpdv)
+#         self.scale = (high - low) / 2
+#         self.mean = (high + low) / 2
+#         self.to(device)
+
+#     def forward(self, obs, agent_ids):
+#         #print(f'obs:{obs.shape}')
+#         # Return output from network scaled to action space limits.
+#         if self.feature_extractor is not None:
+#             x = self.feature_extractor(obs)
+#         else:
+#             x = obs
+#         x = self.pi(x)
+#         x = self.scale * x + self.mean
+#         #print(f'x:{x.shape}')
+#         return x
