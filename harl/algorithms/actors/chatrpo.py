@@ -1,7 +1,6 @@
-"""HATRPO algorithm."""
-
 import numpy as np
 import torch
+import wandb
 from harl.utils.envs_tools import check
 from harl.utils.trpo_util import (
     flat_grad,
@@ -14,6 +13,8 @@ from harl.utils.trpo_util import (
 from harl.algorithms.actors.on_policy_base import OnPolicyBase
 from harl.models.policy_models.stochastic_policy import StochasticPolicy
 
+# Initialize wandb
+wandb.init(project='HATRPO-Training', entity='yungisimon')
 
 class CHATRPO(OnPolicyBase):
     def __init__(self, args, obs_space, act_space, device=torch.device("cpu")):
@@ -35,17 +36,6 @@ class CHATRPO(OnPolicyBase):
         self.backtrack_coeff = args["backtrack_coeff"]
 
     def update(self, sample):
-        """Update actor networks.
-        Args:
-            sample: (Tuple) contains data batch with which to update networks.
-        Returns:
-            kl: (torch.Tensor) KL divergence between old and new policy.
-            loss_improve: (np.float32) loss improvement.
-            expected_improve: (np.ndarray) expected loss improvement.
-            dist_entropy: (torch.Tensor) action entropies.
-            ratio: (torch.Tensor) ratio between new and old policy.
-        """
-
         (
             obs_batch,
             rnn_states_batch,
@@ -57,6 +47,12 @@ class CHATRPO(OnPolicyBase):
             available_actions_batch,
             factor_batch,
         ) = sample
+
+        # Print shapes and values of the sample data
+        print("obs_batch shape:", obs_batch.shape)
+        print("actions_batch shape:", actions_batch.shape)
+        print("old_action_log_probs_batch shape:", old_action_log_probs_batch.shape)
+        print("adv_targ shape:", adv_targ.shape)
 
         old_action_log_probs_batch = check(old_action_log_probs_batch).to(**self.tpdv)
         adv_targ = check(adv_targ).to(**self.tpdv)
@@ -73,12 +69,15 @@ class CHATRPO(OnPolicyBase):
             active_masks_batch,
         )
 
-        # actor update
+        print("action_log_probs shape:", action_log_probs.shape)
+
         ratio = getattr(torch, self.action_aggregation)(
             torch.exp(action_log_probs - old_action_log_probs_batch),
             dim=-1,
             keepdim=True,
         )
+        print("ratio shape:", ratio.shape)
+
         if self.use_policy_active_masks:
             loss = (
                 torch.sum(ratio * factor_batch * adv_targ, dim=-1, keepdim=True)
@@ -89,10 +88,14 @@ class CHATRPO(OnPolicyBase):
                 ratio * factor_batch * adv_targ, dim=-1, keepdim=True
             ).mean()
 
+        print("Initial loss:", loss.item())
+
         loss_grad = torch.autograd.grad(
             loss, self.actor.parameters(), allow_unused=True
         )
         loss_grad = flat_grad(loss_grad)
+        print("loss_grad shape:", loss_grad.shape)
+        print("loss_grad norm:", torch.norm(loss_grad).item())
 
         step_dir = conjugate_gradient(
             self.actor,
@@ -106,6 +109,9 @@ class CHATRPO(OnPolicyBase):
             nsteps=10,
             device=self.device,
         )
+
+        print("step_dir shape:", step_dir.shape)
+        print("step_dir norm:", torch.norm(step_dir).item())
 
         loss = loss.data.cpu().numpy()
 
@@ -124,6 +130,9 @@ class CHATRPO(OnPolicyBase):
         step_size = 1 / torch.sqrt(shs / self.kl_threshold)[0]
         full_step = step_size * step_dir
 
+        print("step_size:", step_size.item())
+        print("full_step norm:", torch.norm(full_step).item())
+
         old_actor = StochasticPolicy(
             self.args, self.obs_space, self.act_space, self.device
         )
@@ -131,7 +140,8 @@ class CHATRPO(OnPolicyBase):
         expected_improve = (loss_grad * full_step).sum(0, keepdim=True)
         expected_improve = expected_improve.data.cpu().numpy()
 
-        # Backtracking line search (https://en.wikipedia.org/wiki/Backtracking_line_search)
+        print("expected_improve:", expected_improve)
+
         flag = False
         fraction = 1
         for i in range(self.ls_step):
@@ -176,6 +186,8 @@ class CHATRPO(OnPolicyBase):
             )
             kl = kl.mean()
 
+            print(f"Iteration {i}, kl: {kl}, new_loss: {new_loss}, loss_improve: {loss_improve}, expected_improve: {expected_improve}")
+
             if (
                 kl < self.kl_threshold
                 and (loss_improve / expected_improve) > self.accept_ratio
@@ -189,7 +201,16 @@ class CHATRPO(OnPolicyBase):
         if not flag:
             params = flat_params(old_actor)
             update_model(self.actor, params)
-            print("policy update does not impove the surrogate")
+            print("policy update does not improve the surrogate")
+
+        # Log metrics to wandb
+        wandb.log({
+            "kl_divergence": kl.item(),
+            "loss_improvement": loss_improve.item(),
+            "expected_improvement": expected_improve.item(),
+            "entropy": dist_entropy.item(),
+            "ratio": ratio.mean().item()
+        })
 
         return kl, loss_improve, expected_improve, dist_entropy, ratio
 
@@ -243,5 +264,14 @@ class CHATRPO(OnPolicyBase):
 
         for k in train_info.keys():
             train_info[k] /= num_updates
+
+        # Log training info to wandb
+        wandb.log({
+            "average_kl_divergence": train_info["kl"],
+            "average_loss_improvement": train_info["loss_improve"],
+            "average_expected_improvement": train_info["expected_improve"],
+            "average_entropy": train_info["dist_entropy"],
+            "average_ratio": train_info["ratio"]
+        })
 
         return train_info

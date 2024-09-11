@@ -100,36 +100,6 @@ class OnPolicyCHATRPOBaseRunner:
 
         print(f"initialized agent_classes: {self.agent_classes}")
         
-        # actor
-        if self.share_param:
-            self.actor = []
-            agent = ALGO_REGISTRY[args["algo"]](
-                {**algo_args["model"], **algo_args["algo"]},
-                self.envs.observation_space[0],
-                self.envs.action_space[0],
-                device=self.device,
-            )
-            self.actor.append(agent)
-            for agent_id in range(1, self.num_agents):
-                assert (
-                    self.envs.observation_space[agent_id]
-                    == self.envs.observation_space[0]
-                ), "Agents have heterogeneous observation spaces, parameter sharing is not valid."
-                assert (
-                    self.envs.action_space[agent_id] == self.envs.action_space[0]
-                ), "Agents have heterogeneous action spaces, parameter sharing is not valid."
-                self.actor.append(self.actor[0])
-        else:
-            self.actor = []
-            for agent_id in range(self.num_agents):
-                agent = ALGO_REGISTRY[args["algo"]](
-                    {**algo_args["model"], **algo_args["algo"]},
-                    self.envs.observation_space[agent_id],
-                    self.envs.action_space[agent_id],
-                    device=self.device,
-                )
-                self.actor.append(agent)
-
         if self.algo_args["render"]["use_render"] is False:  # train, not render
             self.actor_buffer = []
             for agent_id in range(self.num_agents):
@@ -139,7 +109,6 @@ class OnPolicyCHATRPOBaseRunner:
                     self.envs.action_space[agent_id],
                 )
                 self.actor_buffer.append(ac_bu)
-
             share_observation_space = self.envs.share_observation_space[0]
             self.critic = VCritic(
                 {**algo_args["model"], **algo_args["algo"]},
@@ -217,6 +186,7 @@ class OnPolicyCHATRPOBaseRunner:
                     rnn_states_critic,
                 ) = self.collect(step)
                 # actions: (n_threads, n_agents, action_dim)
+                #print(f'actions: {actions.shape}')
                 (
                     obs,
                     share_obs,
@@ -246,7 +216,7 @@ class OnPolicyCHATRPOBaseRunner:
                 )
 
                 self.logger.per_step(data)  # logger callback at each step
-
+                
                 self.insert(data)  # insert data into buffer
 
             # compute return and update network
@@ -794,7 +764,7 @@ class OnPolicyCHATRPOBaseRunner:
             action_dim = self.envs.action_space[agent_id].shape
             class_key = f"{obs_dim}_{self.envs.observation_space[agent_id].dtype}_{action_dim}_{self.envs.action_space[agent_id].dtype}"
 
-            if class_key not in class_key_to_label:
+            if class_key not in class_key_to_label or agent_id == 2:
                 class_label = class_labels[class_counter]
                 class_key_to_label[class_key] = class_label
                 class_counter += 1
