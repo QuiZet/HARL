@@ -755,6 +755,7 @@ class OnPolicyCHATRPOBaseRunner:
     def init_agent_classes(self):
         """Initialize the agent_classes dictionary."""
         self.agent_classes = {}
+        self.agent_id_class = dict()
         class_labels = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         class_counter = 0
         class_key_to_label = {}
@@ -778,13 +779,17 @@ class OnPolicyCHATRPOBaseRunner:
             class_label = class_key_to_label[class_key]
             self.agent_classes[class_label][f"class_{class_label}_number_of_agents"] += 1
             self.agent_classes[class_label][f"class_{class_label}_agents"].append(agent_id)
+            self.agent_id_class[agent_id] = class_label
 
         print(f'initialized agent_classes: {self.agent_classes}')
         
     def init_class_actors(self):
         """Initialize class actors."""
+        print(f'self.args:{self.args}')
         self.class_actors = {}
         for class_label, class_info in self.agent_classes.items():
+            print(f'class_label:{class_label}')
+            print(f'class_info:{class_info}')
             agent = ALGO_REGISTRY[self.args["algo"]](
                 {**self.algo_args["model"], **self.algo_args["algo"]},
                 self.envs.observation_space[class_info[f"class_{class_label}_agents"][0]],
@@ -797,6 +802,7 @@ class OnPolicyCHATRPOBaseRunner:
         for agent_id in range(self.num_agents):
             class_label = self.get_class_label(agent_id)
             self.actor.append(self.class_actors[class_label])
+            print(f'OnPolicyCHATRPOBaseRunner.init_class_actors::{agent_id} class_label:{class_label}')
     
     def get_class_label(self, agent_id):
         """Get the class label for a given agent ID."""

@@ -16,6 +16,22 @@ from harl.models.policy_models.stochastic_policy import StochasticPolicy
 # Initialize wandb
 wandb.init(project='HATRPO-Training', entity='yungisimon')
 
+# Global verbosity flag for the file
+VERBOSE = False  # Set to False to disable verbose prints for the entire file
+
+def verbose_decorator(func):
+    """Decorator that injects a `vprint` function for verbosity control."""
+    def wrapper(*args, **kwargs):
+        # Define a custom vprint function for controlling prints
+        def vprint(*args, **kwargs):
+            if VERBOSE:
+                print(*args, **kwargs)
+        
+        # Call the original function, passing `vprint` as a keyword argument
+        return func(*args, vprint=vprint, **kwargs)
+    
+    return wrapper
+
 class CHATRPO(OnPolicyBase):
     def __init__(self, args, obs_space, act_space, device=torch.device("cpu")):
         """Initialize HATRPO algorithm.
@@ -28,14 +44,17 @@ class CHATRPO(OnPolicyBase):
         assert (
             act_space.__class__.__name__ != "MultiDiscrete"
         ), "only continuous and discrete action space is supported by HATRPO."
+        print(f'CHATRPO::__init__')
         super(CHATRPO, self).__init__(args, obs_space, act_space, device)
 
         self.kl_threshold = args["kl_threshold"]
         self.ls_step = args["ls_step"]
         self.accept_ratio = args["accept_ratio"]
         self.backtrack_coeff = args["backtrack_coeff"]
+        print(f'CHATRPO::__init__ </done>')
 
-    def update(self, sample):
+    @verbose_decorator
+    def update(self, sample, vprint=print):
         (
             obs_batch,
             rnn_states_batch,
@@ -49,10 +68,10 @@ class CHATRPO(OnPolicyBase):
         ) = sample
 
         # Print shapes and values of the sample data
-        print("obs_batch shape:", obs_batch.shape)
-        print("actions_batch shape:", actions_batch.shape)
-        print("old_action_log_probs_batch shape:", old_action_log_probs_batch.shape)
-        print("adv_targ shape:", adv_targ.shape)
+        vprint("obs_batch shape:", obs_batch.shape)
+        vprint("actions_batch shape:", actions_batch.shape)
+        vprint("old_action_log_probs_batch shape:", old_action_log_probs_batch.shape)
+        vprint("adv_targ shape:", adv_targ.shape)
 
         old_action_log_probs_batch = check(old_action_log_probs_batch).to(**self.tpdv)
         adv_targ = check(adv_targ).to(**self.tpdv)
@@ -69,14 +88,14 @@ class CHATRPO(OnPolicyBase):
             active_masks_batch,
         )
 
-        print("action_log_probs shape:", action_log_probs.shape)
+        vprint("action_log_probs shape:", action_log_probs.shape)
 
         ratio = getattr(torch, self.action_aggregation)(
             torch.exp(action_log_probs - old_action_log_probs_batch),
             dim=-1,
             keepdim=True,
         )
-        print("ratio shape:", ratio.shape)
+        vprint("ratio shape:", ratio.shape)
 
         if self.use_policy_active_masks:
             loss = (
@@ -88,14 +107,14 @@ class CHATRPO(OnPolicyBase):
                 ratio * factor_batch * adv_targ, dim=-1, keepdim=True
             ).mean()
 
-        print("Initial loss:", loss.item())
+        vprint("Initial loss:", loss.item())
 
         loss_grad = torch.autograd.grad(
             loss, self.actor.parameters(), allow_unused=True
         )
         loss_grad = flat_grad(loss_grad)
-        print("loss_grad shape:", loss_grad.shape)
-        print("loss_grad norm:", torch.norm(loss_grad).item())
+        vprint("loss_grad shape:", loss_grad.shape)
+        vprint("loss_grad norm:", torch.norm(loss_grad).item())
 
         step_dir = conjugate_gradient(
             self.actor,
@@ -110,8 +129,8 @@ class CHATRPO(OnPolicyBase):
             device=self.device,
         )
 
-        print("step_dir shape:", step_dir.shape)
-        print("step_dir norm:", torch.norm(step_dir).item())
+        vprint("step_dir shape:", step_dir.shape)
+        vprint("step_dir norm:", torch.norm(step_dir).item())
 
         loss = loss.data.cpu().numpy()
 
@@ -130,8 +149,8 @@ class CHATRPO(OnPolicyBase):
         step_size = 1 / torch.sqrt(shs / self.kl_threshold)[0]
         full_step = step_size * step_dir
 
-        print("step_size:", step_size.item())
-        print("full_step norm:", torch.norm(full_step).item())
+        vprint("step_size:", step_size.item())
+        vprint("full_step norm:", torch.norm(full_step).item())
 
         old_actor = StochasticPolicy(
             self.args, self.obs_space, self.act_space, self.device
@@ -140,7 +159,7 @@ class CHATRPO(OnPolicyBase):
         expected_improve = (loss_grad * full_step).sum(0, keepdim=True)
         expected_improve = expected_improve.data.cpu().numpy()
 
-        print("expected_improve:", expected_improve)
+        vprint("expected_improve:", expected_improve)
 
         flag = False
         fraction = 1
@@ -186,7 +205,7 @@ class CHATRPO(OnPolicyBase):
             )
             kl = kl.mean()
 
-            print(f"Iteration {i}, kl: {kl}, new_loss: {new_loss}, loss_improve: {loss_improve}, expected_improve: {expected_improve}")
+            vprint(f"Iteration {i}, kl: {kl}, new_loss: {new_loss}, loss_improve: {loss_improve}, expected_improve: {expected_improve}")
 
             if (
                 kl < self.kl_threshold
@@ -201,7 +220,7 @@ class CHATRPO(OnPolicyBase):
         if not flag:
             params = flat_params(old_actor)
             update_model(self.actor, params)
-            print("policy update does not improve the surrogate")
+            vprint("policy update does not improve the surrogate")
 
         # Log metrics to wandb
         wandb.log({
