@@ -700,45 +700,51 @@ class OnPolicyCHATRPOBaseRunner:
         self.critic.prep_training()
 
     def save(self):
-        """Save model parameters."""
-        for agent_id in range(self.num_agents):
-            policy_actor = self.actor[agent_id].actor
+        """Save model parameters for class-based actors and critics."""
+        # Save actors and critics for each class
+        for class_label, actor in self.class_actors.items():
+            # Save the actor for this class
+            policy_actor = actor.actor
             torch.save(
                 policy_actor.state_dict(),
-                str(self.save_dir) + "/actor_agent" + str(agent_id) + ".pt",
+                f"{str(self.save_dir)}/actor_class_{class_label}.pt",
             )
-        policy_critic = self.critic.critic
-        torch.save(
-            policy_critic.state_dict(), str(self.save_dir) + "/critic_agent" + ".pt"
-        )
+            # Save the critic for this class
+            policy_critic = actor.critic
+            torch.save(
+                policy_critic.state_dict(),
+                f"{str(self.save_dir)}/critic_class_{class_label}.pt",
+            )
+
+        # Save the value normalizer if it exists
         if self.value_normalizer is not None:
             torch.save(
                 self.value_normalizer.state_dict(),
-                str(self.save_dir) + "/value_normalizer" + ".pt",
+                f"{str(self.save_dir)}/value_normalizer.pt",
             )
 
     def restore(self):
-        """Restore model parameters."""
-        for agent_id in range(self.num_agents):
-            policy_actor_state_dict = torch.load(
-                str(self.algo_args["train"]["model_dir"])
-                + "/actor_agent"
-                + str(agent_id)
-                + ".pt"
+        """Restore model parameters for class-based actors and critics."""
+        # Restore actors and critics for each class
+        for class_label, actor in self.class_actors.items():
+            # Load the saved actor state dict for this class
+            actor_state_dict = torch.load(
+                f"{str(self.algo_args['train']['model_dir'])}/actor_class_{class_label}.pt"
             )
-            self.actor[agent_id].actor.load_state_dict(policy_actor_state_dict)
-        if not self.algo_args["render"]["use_render"]:
-            policy_critic_state_dict = torch.load(
-                str(self.algo_args["train"]["model_dir"]) + "/critic_agent" + ".pt"
+            actor.actor.load_state_dict(actor_state_dict)
+            
+            # Load the saved critic state dict for this class
+            critic_state_dict = torch.load(
+                f"{str(self.algo_args['train']['model_dir'])}/critic_class_{class_label}.pt"
             )
-            self.critic.critic.load_state_dict(policy_critic_state_dict)
-            if self.value_normalizer is not None:
-                value_normalizer_state_dict = torch.load(
-                    str(self.algo_args["train"]["model_dir"])
-                    + "/value_normalizer"
-                    + ".pt"
-                )
-                self.value_normalizer.load_state_dict(value_normalizer_state_dict)
+            actor.critic.load_state_dict(critic_state_dict)
+
+        # Restore the value normalizer if it exists
+        if self.value_normalizer is not None:
+            value_normalizer_state_dict = torch.load(
+                f"{str(self.algo_args['train']['model_dir'])}/value_normalizer.pt"
+            )
+            self.value_normalizer.load_state_dict(value_normalizer_state_dict)
 
     def close(self):
         """Close environment, writter, and logger."""
