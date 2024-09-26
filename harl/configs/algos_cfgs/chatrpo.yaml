@@ -30,7 +30,6 @@ train:
   use_proper_time_limits: True
   # if set, load models from this directory; otherwise, randomly initialise the models
   model_dir: ~
-    #/home/yungisimon/HARL/results/pettingzoo_mpe/simple_tag_3_agents_1_class/chatrpo/run1/models
 eval:
   # whether to use evaluation
   use_eval: True
