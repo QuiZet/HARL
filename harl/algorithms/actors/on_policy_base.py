@@ -40,6 +40,7 @@ class OnPolicyBase:
             eps=self.opti_eps,
             weight_decay=self.weight_decay,
         )
+        print(f'OnPolicyBase.__init__::self.actor init')
 
     def lr_decay(self, episode, episodes):
         """Decay the learning rates.

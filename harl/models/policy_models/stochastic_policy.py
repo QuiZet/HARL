@@ -20,6 +20,7 @@ class StochasticPolicy(nn.Module):
             device: (torch.device) specifies the device to run on (cpu/gpu).
         """
         super(StochasticPolicy, self).__init__()
+        #print(f'StochasticPolicy.__init__::{id(self)}')
         self.hidden_sizes = args["hidden_sizes"]
         self.args = args
         self.gain = args["gain"]
@@ -68,6 +69,7 @@ class StochasticPolicy(nn.Module):
             action_log_probs: (torch.Tensor) log probabilities of taken actions.
             rnn_states: (torch.Tensor) updated RNN hidden states.
         """
+        #print(f"forward Memory address of self: {id(self)}")
         obs = check(obs).to(**self.tpdv)
         rnn_states = check(rnn_states).to(**self.tpdv)
         masks = check(masks).to(**self.tpdv)
@@ -102,6 +104,7 @@ class StochasticPolicy(nn.Module):
             dist_entropy: (torch.Tensor) action distribution entropy for the given inputs.
             action_distribution: (torch.distributions) action distribution.
         """
+        #print(f"evaluate_actions Memory address of self: {id(self)}")
         obs = check(obs).to(**self.tpdv)
         rnn_states = check(rnn_states).to(**self.tpdv)
         action = check(action).to(**self.tpdv)

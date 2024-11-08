@@ -183,7 +183,17 @@ class TwinContinuousQCriticEmbd:
         next_actions,
         gamma,
     ):
-        """Train the critic."""
+        """Train the critic.
+        Args:
+            share_obs: (np.ndarray) shape is (batch_size, dim)
+            actions: (np.ndarray) shape is (n_agents, batch_size, dim)
+            reward: (np.ndarray) shape is (batch_size, 1)
+            done: (np.ndarray) shape is (batch_size, 1)
+            term: (np.ndarray) shape is (batch_size, 1)
+            next_share_obs: (np.ndarray) shape is (batch_size, dim)
+            next_actions: (np.ndarray) shape is (n_agents, batch_size, dim)
+            gamma: (np.ndarray) shape is (batch_size, 1)
+        """
         assert share_obs.__class__.__name__ == "ndarray"
         assert actions.__class__.__name__ == "ndarray"
         assert reward.__class__.__name__ == "ndarray"
@@ -191,7 +201,6 @@ class TwinContinuousQCriticEmbd:
         assert term.__class__.__name__ == "ndarray"
         assert next_share_obs.__class__.__name__ == "ndarray"
         assert gamma.__class__.__name__ == "ndarray"
-
         share_obs = check(share_obs).to(**self.tpdv)
         actions = check(actions).to(**self.tpdv)
         actions = torch.cat([actions[i] for i in range(actions.shape[0])], dim=-1)
