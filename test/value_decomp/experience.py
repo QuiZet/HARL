@@ -1,8 +1,3 @@
-# experience.py
-
-from config import device
-import torch
-
 def collect_experience(env, adversary_agents, memory, episode_rewards):
     env.reset()
     prev_obs = {}

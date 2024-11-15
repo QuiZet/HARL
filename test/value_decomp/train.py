@@ -8,10 +8,12 @@ from pettingzoo.mpe import simple_tag_v3
 
 from config import *
 from ppo_agent import PPOAgent
+from critic import Critic
+from decomposed_critic import DecomposedCritic
 from experience import collect_experience
 from gae import compute_gae
 
-def train():
+def train(use_decomposed_critic=False):
     env = simple_tag_v3.env()
     env.reset()
 
@@ -21,16 +23,32 @@ def train():
 
     # Initialize adversary agents
     adversary_agents = []
-    for agent in adversary_ids:
-        obs_size = env.observation_space(agent).shape[0]
-        act_size = env.action_space(agent).n
+    obs_sizes = []
+    act_sizes = []
+    for agent_id in adversary_ids:
+        obs_size = env.observation_space(agent_id).shape[0]
+        act_size = env.action_space(agent_id).n
+        obs_sizes.append(obs_size)
+        act_sizes.append(act_size)
         adversary_agents.append(PPOAgent(obs_size, act_size).to(device))
 
+    # Initialize critics
+    if use_decomposed_critic:
+        critic = DecomposedCritic()  # Placeholder
+    else:
+        critics = [Critic(obs_size).to(device) for obs_size in obs_sizes]
+
     # Initialize optimizers
-    optimizers = [optim.Adam(agent.parameters(), lr=LR) for agent in adversary_agents]
+    if use_decomposed_critic:
+        optimizers = [optim.Adam(agent.parameters(), lr=LR) for agent in adversary_agents]
+        critic_optimizer = optim.Adam(critic.parameters(), lr=LR)
+    else:
+        optimizers = [optim.Adam(list(agent.parameters()) + list(critic.parameters()), lr=LR)
+                      for agent, critic in zip(adversary_agents, critics)]
 
     # Memory for each adversary
-    memory = [{'observations': [], 'actions': [], 'log_probs': [], 'rewards': [], 'dones': []} for _ in range(num_adversaries)]
+    memory = [{'observations': [], 'actions': [], 'log_probs': [], 'rewards': [], 'dones': []}
+              for _ in range(num_adversaries)]
 
     # Initialize lists to store metrics
     total_rewards = [0 for _ in range(num_adversaries)]
@@ -58,21 +76,17 @@ def train():
 
             # Compute returns and advantages
             with torch.no_grad():
-                values = agent.get_value(obs)
-                if values is None:
-                    print("get_value returned None")
-                    continue  # Skip this agent or handle appropriately
-                values = values.cpu().numpy().flatten()
-                if dones[-1]:
+                if use_decomposed_critic:
+                    # Placeholder: Implement decomposed critic logic here
+                    values = np.zeros(len(rewards))
                     next_value = 0
                 else:
-                    next_obs = memory[idx]['observations'][-1]
-                    next_value = agent.get_value(next_obs)
-                    if next_value is None:
-                        print("get_value returned None for next_obs")
+                    values = critics[idx](obs).cpu().numpy().flatten()
+                    if dones[-1]:
                         next_value = 0
                     else:
-                        next_value = next_value.item()
+                        next_obs = memory[idx]['observations'][-1]
+                        next_value = critics[idx](next_obs).item()
             returns, advantages = compute_gae(next_value, rewards, masks, values)
 
             returns = torch.tensor(returns, dtype=torch.float32).to(device)
@@ -106,7 +120,14 @@ def train():
                     surr1 = ratio * batch_advantages
                     surr2 = torch.clamp(ratio, 1.0 - CLIP_EPS, 1.0 + CLIP_EPS) * batch_advantages
                     actor_loss = -torch.min(surr1, surr2).mean()
-                    critic_loss = (agent.get_value(batch_obs).squeeze() - batch_returns).pow(2).mean()
+
+                    # Critic loss
+                    if use_decomposed_critic:
+                        # Placeholder: Implement decomposed critic loss computation
+                        critic_loss = torch.tensor(0.0)  # Dummy value
+                    else:
+                        value_preds = critics[idx](batch_obs).squeeze()
+                        critic_loss = (value_preds - batch_returns).pow(2).mean()
 
                     loss = actor_loss + 0.5 * critic_loss - ENTROPY_COEFF * entropy
 
@@ -114,6 +135,8 @@ def train():
                     optimizers[idx].zero_grad()
                     loss.backward()
                     nn.utils.clip_grad_norm_(agent.parameters(), MAX_GRAD_NORM)
+                    if not use_decomposed_critic:
+                        nn.utils.clip_grad_norm_(critics[idx].parameters(), MAX_GRAD_NORM)
                     optimizers[idx].step()
 
                     # Collect metrics

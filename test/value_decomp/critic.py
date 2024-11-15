@@ -1,5 +1,3 @@
-# critic.py
-
 import torch
 import torch.nn as nn
 from config import device
@@ -22,5 +20,3 @@ class Critic(nn.Module):
             obs = obs.unsqueeze(0)  # Add batch dimension
         value = self.critic(obs)
         return value
-
-class ValueDecompositionCritic(nn.Module):
