@@ -12,6 +12,14 @@ from critic import Critic
 from decomposed_critic import DecomposedCritic
 from experience import collect_experience
 from gae import compute_gae
+import random
+
+
+
+# Configure deterministic behavior
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 
 def train(use_decomposed_critic=False):
     env = simple_tag_v3.env()
