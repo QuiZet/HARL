@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from pettingzoo.mpe import simple_tag_v3
+from pettingzoo.test import seed_test, parallel_seed_test
 
 from config import *
 from ppo_agent import PPOAgent
@@ -23,8 +24,26 @@ torch.backends.cudnn.benchmark = False
 
 def train(use_decomposed_critic=False):
     env = simple_tag_v3.env()
-    env.reset()
+    env.reset(seed=42)
+    # force initialization???
+    # do_once = True
+    # for agent in env.agent_iter():
+    #     if do_once:
+    #         env.reset(seed=42)
+    #         do_once = False
+    #     action = env.action_space(agent).sample()
 
+    # Loop over all agents and sample actions
+    for agent in env.agents:
+        # Sample a random action for the current agent
+        #action = env.action_space(agent).sample()
+        #print(f"Agent {agent} sampled action: {action}")
+        actionspace = env.action_space(agent)
+        actionspace.seed(42)
+    # SEED = 42  
+    # random.seed(SEED)
+    # np.random.seed(SEED)
+    
     # Identify adversaries
     adversary_ids = [agent for agent in env.possible_agents if agent.startswith("adversary")]
     num_adversaries = len(adversary_ids)
@@ -68,6 +87,9 @@ def train(use_decomposed_critic=False):
     timestep = 0
     episode = 0
     while timestep < TIMESTEPS:
+        # if timestep == 2:
+        #     assert(False)
+
         collect_experience(env, adversary_agents, memory, episode_rewards)
         timestep += 1
 

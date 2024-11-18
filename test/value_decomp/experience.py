@@ -1,3 +1,5 @@
+import numpy as np
+
 def collect_experience(env, adversary_agents, memory, episode_rewards):
     env.reset()
     prev_obs = {}
@@ -7,6 +9,7 @@ def collect_experience(env, adversary_agents, memory, episode_rewards):
     prev_rewards = {}
     for agent in env.agent_iter():
         observation, reward, termination, truncation, info = env.last()
+        #print(f'observation:{observation}')
         done = termination or truncation
         if agent.startswith("adversary"):
             agent_idx = int(agent.split('_')[1])
@@ -22,6 +25,7 @@ def collect_experience(env, adversary_agents, memory, episode_rewards):
             else:
                 # Get action for current observation
                 action, log_prob, entropy = adversary_agents[agent_idx].get_action(observation)
+                #print(f'action ppo:{action}')
                 # Store current data for next step
                 prev_obs[agent] = observation
                 prev_actions[agent] = action
@@ -32,7 +36,13 @@ def collect_experience(env, adversary_agents, memory, episode_rewards):
             if done:
                 action = None
             else:
+                # act_size = env.action_space(agent).n
+                # print(f"agent:{agent} n:{act_size}")
+                # action = np.random.randint(act_size)
+                #print(f'action random:{action}')
                 action = env.action_space(agent).sample()
+
+        #print(f'action:{action}')
         env.step(action)
     # After the loop, handle the last step for each adversary
     for agent in env.agents:
